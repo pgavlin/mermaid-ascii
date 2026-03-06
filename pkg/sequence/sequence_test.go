@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 func TestParse(t *testing.T) {

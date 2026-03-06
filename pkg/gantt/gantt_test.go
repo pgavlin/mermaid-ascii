@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 func TestParseTaskAfterDependency(t *testing.T) {

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/AlexanderGrooff/mermaid-ascii/cmd"
+import "github.com/pgavlin/mermaid-ascii/cmd"
 
 func main() {
 	cmd.Execute()

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/sequence"
+	"github.com/pgavlin/mermaid-ascii/pkg/sequence"
 )
 
 func ExampleParse() {

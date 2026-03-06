@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/sequence"
+	"github.com/pgavlin/mermaid-ascii/pkg/sequence"
 	"strings"
 	"testing"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 // TestSequenceDiagramIntegration tests end-to-end rendering of sequence diagrams.

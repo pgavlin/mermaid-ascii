@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 const JourneyKeyword = "journey"

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/sequence"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/sequence"
 )
 
 // DiagramDetector can detect and create a specific diagram type.

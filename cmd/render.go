@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 func RenderDiagram(input string, config *diagram.Config) (string, error) {

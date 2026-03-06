@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram/testutil"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram/testutil"
 	"github.com/mattn/go-runewidth"
 )
 

@@ -1,4 +1,4 @@
-module github.com/AlexanderGrooff/mermaid-ascii
+module github.com/pgavlin/mermaid-ascii
 
 go 1.21
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 func TestIsClassDiagram(t *testing.T) {

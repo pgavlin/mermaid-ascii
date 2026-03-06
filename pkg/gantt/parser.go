@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
 const GanttKeyword = "gantt"

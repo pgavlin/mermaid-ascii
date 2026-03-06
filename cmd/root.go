@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/AlexanderGrooff/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
