@@ -121,8 +121,11 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 	lines = append(lines, xAxisLine)
 
 	// X-axis labels
+	var legend []string
 	if len(chart.XValues) > 0 {
-		lines = append(lines, renderXLabels(chart.XValues, dataCount, barWidth, yLabelWidth)...)
+		var labelLines []string
+		labelLines, legend = renderXLabels(chart.XValues, dataCount, barWidth, yLabelWidth)
+		lines = append(lines, labelLines...)
 	}
 
 	// Axis labels
@@ -135,15 +138,17 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 		lines = append(lines, strings.Repeat(" ", pad)+chart.XLabel)
 	}
 
+	// Merge legend to the right of chart body if present
+	if len(legend) > 0 {
+		lines = mergeLegendRight(lines, legend, yLabelWidth+2+dataCount*barWidth)
+	}
+
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-// renderXLabels renders x-axis labels using one of three strategies:
-//  1. Single row — if every label fits within its bar width
-//  2. Staggered two rows — if labels fit within 2x bar width
-//  3. Vertical — labels written top-to-bottom, one character per row
-func renderXLabels(labels []string, dataCount, barWidth, yLabelWidth int) []string {
-	// Determine the max label length (capped for display)
+// renderXLabels renders x-axis labels and optionally returns legend entries.
+// Returns (label lines for below the axis, legend entries for the right side).
+func renderXLabels(labels []string, dataCount, barWidth, yLabelWidth int) ([]string, []string) {
 	maxLabel := 0
 	for i, l := range labels {
 		if i >= dataCount {
@@ -157,16 +162,14 @@ func renderXLabels(labels []string, dataCount, barWidth, yLabelWidth int) []stri
 	prefix := strings.Repeat(" ", yLabelWidth+2)
 
 	if maxLabel <= barWidth {
-		// Strategy 1: single horizontal row
-		return []string{strings.TrimRight(singleRowLabels(labels, dataCount, barWidth, prefix), " ")}
+		return []string{strings.TrimRight(singleRowLabels(labels, dataCount, barWidth, prefix), " ")}, nil
 	}
 
 	if maxLabel <= barWidth*2 {
-		// Strategy 2: staggered two rows
-		return staggeredLabels(labels, dataCount, barWidth, prefix)
+		return staggeredLabels(labels, dataCount, barWidth, prefix), nil
 	}
 
-	// Strategy 3: short vertical or legend with keys
+	// Short vertical or legend with keys
 	return verticalLabels(labels, dataCount, barWidth, prefix)
 }
 
@@ -242,7 +245,7 @@ func staggeredLabels(labels []string, dataCount, barWidth int, prefix string) []
 
 const verticalLabelMaxRows = 5
 
-func verticalLabels(labels []string, dataCount, barWidth int, prefix string) []string {
+func verticalLabels(labels []string, dataCount, barWidth int, prefix string) ([]string, []string) {
 	// Determine the max label length
 	maxLen := 0
 	for i, l := range labels {
@@ -256,30 +259,96 @@ func verticalLabels(labels []string, dataCount, barWidth int, prefix string) []s
 
 	if maxLen <= verticalLabelMaxRows {
 		// Short enough to render vertically without a legend
-		return verticalLabelRows(labels, dataCount, barWidth, prefix)
+		return verticalLabelRows(labels, dataCount, barWidth, prefix), nil
 	}
 
-	// Use short keys on the axis with a legend below
+	// Use short keys on the axis with a legend to the right
 	keys := make([]string, dataCount)
 	for i := 0; i < dataCount; i++ {
 		keys[i] = labelKey(i)
 	}
 
-	// Render the short keys as a single horizontal row (they always fit)
-	rows := []string{strings.TrimRight(singleRowLabels(keys, dataCount, barWidth, prefix), " ")}
+	axisRow := []string{strings.TrimRight(singleRowLabels(keys, dataCount, barWidth, prefix), " ")}
 
-	// Append legend
-	rows = append(rows, "")
+	// Build legend entries
+	var legend []string
 	for i := 0; i < dataCount; i++ {
 		label := ""
 		if i < len(labels) {
 			label = labels[i]
 		}
 		if label != "" {
-			rows = append(rows, fmt.Sprintf("%s%s: %s", prefix, keys[i], label))
+			legend = append(legend, fmt.Sprintf("%s: %s", keys[i], label))
 		}
 	}
-	return rows
+	return axisRow, legend
+}
+
+// mergeLegendRight places legend entries to the right of the chart body lines,
+// using multiple columns if there are more entries than available rows.
+func mergeLegendRight(lines []string, legend []string, chartRightEdge int) []string {
+	if len(legend) == 0 {
+		return lines
+	}
+
+	// Find the first chart body line (skip title/blank lines at the top)
+	// Chart body lines are those starting with y-axis labels, containing the vertical bar character
+	firstBody := 0
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if len(trimmed) > 0 && (trimmed[0] >= '0' && trimmed[0] <= '9' || trimmed[0] == '-') {
+			firstBody = i
+			break
+		}
+	}
+
+	availableRows := chartHeight
+
+	// Arrange legend into columns
+	numCols := (len(legend) + availableRows - 1) / availableRows
+	rowsPerCol := (len(legend) + numCols - 1) / numCols
+
+	// Find max entry width per column for alignment
+	colWidths := make([]int, numCols)
+	for i, entry := range legend {
+		col := i / rowsPerCol
+		if len(entry) > colWidths[col] {
+			colWidths[col] = len(entry)
+		}
+	}
+
+	const legendGap = 2 // gap between chart and legend, and between columns
+
+	// Build legend rows
+	legendRows := make([]string, rowsPerCol)
+	for row := 0; row < rowsPerCol; row++ {
+		var parts []string
+		for col := 0; col < numCols; col++ {
+			idx := col*rowsPerCol + row
+			if idx < len(legend) {
+				entry := legend[idx]
+				padded := entry + strings.Repeat(" ", colWidths[col]-len(entry))
+				parts = append(parts, padded)
+			}
+		}
+		legendRows[row] = strings.TrimRight(strings.Join(parts, strings.Repeat(" ", legendGap)), " ")
+	}
+
+	// Merge: pad each chart body line and append the corresponding legend row
+	for i, legendRow := range legendRows {
+		lineIdx := firstBody + i
+		if lineIdx >= len(lines) {
+			break
+		}
+		line := lines[lineIdx]
+		// Pad line to chart right edge
+		if len(line) < chartRightEdge {
+			line += strings.Repeat(" ", chartRightEdge-len(line))
+		}
+		lines[lineIdx] = line + strings.Repeat(" ", legendGap) + legendRow
+	}
+
+	return lines
 }
 
 func verticalLabelRows(labels []string, dataCount, barWidth int, prefix string) []string {

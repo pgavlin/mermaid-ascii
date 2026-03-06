@@ -315,12 +315,57 @@ func TestRenderLegendLabels(t *testing.T) {
 		t.Fatalf("Render failed: %v", err)
 	}
 
-	// Long labels should use legend with short keys
+	// Long labels should use legend with short keys to the right of the chart
 	if !strings.Contains(output, "a: January") {
-		t.Error("expected legend entry 'a: January' in output")
+		t.Errorf("expected legend entry 'a: January' in output:\n%s", output)
 	}
 	if !strings.Contains(output, "l: December") {
-		t.Error("expected legend entry 'l: December' in output")
+		t.Errorf("expected legend entry 'l: December' in output:\n%s", output)
+	}
+	// Legend should appear on the same lines as chart body (to the right)
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "a: January") {
+			if !strings.Contains(line, "│") {
+				t.Error("legend should be on the same line as chart body")
+			}
+			break
+		}
+	}
+}
+
+func TestRenderMultiColumnLegend(t *testing.T) {
+	input := `xychart-beta
+    x-axis "X" ["Alpha One", "Bravo Two", "Charlie Three", "Delta Four", "Echo Five", "Foxtrot Six", "Golf Seven", "Hotel Eight", "India Nine", "Juliet Ten", "Kilo Eleven", "Lima Twelve", "Mike Thirteen", "November Fourteen", "Oscar Fifteen", "Papa Sixteen"]
+    y-axis "Y" 0 --> 100
+    bar [30, 50, 70, 40, 60, 80, 55, 65, 75, 45, 85, 95, 35, 55, 72, 88]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	output, err := Render(chart, diagram.DefaultConfig())
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	// 16 entries > 15 chart rows, so should use 2 columns
+	if !strings.Contains(output, "a: Alpha One") {
+		t.Errorf("expected legend entry 'a: Alpha One' in output:\n%s", output)
+	}
+	if !strings.Contains(output, "p: Papa Sixteen") {
+		t.Errorf("expected legend entry 'p: Papa Sixteen' in output:\n%s", output)
+	}
+	// Verify multi-column: some line should contain two legend entries
+	found := false
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "a: Alpha One") && strings.Contains(line, "i: India Nine") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected multi-column legend with entries on same line:\n%s", output)
 	}
 }
 
