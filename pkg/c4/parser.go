@@ -4,36 +4,9 @@ package c4
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
-)
-
-var (
-	// Matches C4Context, C4Container, C4Component, C4Dynamic
-	c4KeywordRegex = regexp.MustCompile(`^\s*(C4Context|C4Container|C4Component|C4Dynamic)\s*$`)
-
-	// Person(alias, "label", "description")
-	personRegex = regexp.MustCompile(`^\s*Person(?:_Ext)?\(\s*(\w+)\s*,\s*"([^"]*)"\s*(?:,\s*"([^"]*)")?\s*\)`)
-
-	// System(alias, "label", "description")
-	systemRegex = regexp.MustCompile(`^\s*System(?:_Ext|_Boundary)?\(\s*(\w+)\s*,\s*"([^"]*)"\s*(?:,\s*"([^"]*)")?\s*\)`)
-
-	// Container(alias, "label", "tech", "description")
-	containerRegex = regexp.MustCompile(`^\s*Container(?:_Ext|Db|Queue|_Boundary)?\(\s*(\w+)\s*,\s*"([^"]*)"\s*(?:,\s*"([^"]*)")?\s*(?:,\s*"([^"]*)")?\s*\)`)
-
-	// Component(alias, "label", "tech", "description")
-	componentRegex = regexp.MustCompile(`^\s*Component(?:_Ext|Db|Queue)?\(\s*(\w+)\s*,\s*"([^"]*)"\s*(?:,\s*"([^"]*)")?\s*(?:,\s*"([^"]*)")?\s*\)`)
-
-	// Boundary(alias, "label") {
-	boundaryRegex = regexp.MustCompile(`^\s*(?:Enterprise_Boundary|System_Boundary|Container_Boundary|Boundary)\(\s*(\w+)\s*,\s*"([^"]*)"\s*\)\s*\{?\s*$`)
-
-	// Rel(from, to, "label", "tech")
-	relRegex = regexp.MustCompile(`^\s*(?:Rel|Rel_Back|Rel_Neighbor|Rel_Back_Neighbor|BiRel)\(\s*(\w+)\s*,\s*(\w+)\s*,\s*"([^"]*)"\s*(?:,\s*"([^"]*)")?\s*\)`)
-
-	// end of boundary block
-	endRegex = regexp.MustCompile(`^\s*\}\s*$`)
+	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
 // C4DiagramType represents the specific C4 diagram type.
@@ -69,18 +42,25 @@ type Relationship struct {
 
 // Boundary represents a C4 boundary containing elements.
 type Boundary struct {
-	Alias    string
-	Label    string
-	Elements []*Element
+	Alias      string
+	Label      string
+	Elements   []*Element
 	Boundaries []*Boundary
 }
 
 // C4Diagram represents a parsed C4 diagram.
 type C4Diagram struct {
-	DiagramType  C4DiagramType
-	Elements     []*Element
+	DiagramType   C4DiagramType
+	Elements      []*Element
 	Relationships []*Relationship
-	Boundaries   []*Boundary
+	Boundaries    []*Boundary
+}
+
+var c4Keywords = map[string]C4DiagramType{
+	"C4Context":   C4Context,
+	"C4Container": C4Container,
+	"C4Component": C4Component,
+	"C4Dynamic":   C4Dynamic,
 }
 
 // IsC4Diagram returns true if the input starts with a C4 diagram keyword.
@@ -91,7 +71,12 @@ func IsC4Diagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return c4KeywordRegex.MatchString(trimmed)
+		for kw := range c4Keywords {
+			if trimmed == kw {
+				return true
+			}
+		}
+		return false
 	}
 	return false
 }
@@ -103,119 +88,255 @@ func Parse(input string) (*C4Diagram, error) {
 		return nil, fmt.Errorf("empty input")
 	}
 
-	rawLines := diagram.SplitLines(input)
-	lines := diagram.RemoveComments(rawLines)
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("no content found")
-	}
+	s := parser.NewScanner(input)
+	s.SkipNewlines()
 
-	match := c4KeywordRegex.FindStringSubmatch(strings.TrimSpace(lines[0]))
-	if match == nil {
+	// Expect C4 keyword
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent {
 		return nil, fmt.Errorf("expected C4 diagram keyword")
 	}
-
-	var dtype C4DiagramType
-	switch match[1] {
-	case "C4Context":
-		dtype = C4Context
-	case "C4Container":
-		dtype = C4Container
-	case "C4Component":
-		dtype = C4Component
-	case "C4Dynamic":
-		dtype = C4Dynamic
+	keyword := s.Next().Text
+	dtype, ok := c4Keywords[keyword]
+	if !ok {
+		return nil, fmt.Errorf("expected C4 diagram keyword")
 	}
+	s.SkipNewlines()
 
-	d := &C4Diagram{
-		DiagramType: dtype,
-	}
+	d := &C4Diagram{DiagramType: dtype}
 
-	_, err := parseC4Lines(d, lines[1:], nil)
-	if err != nil {
+	if err := parseStatements(s, d, nil); err != nil {
 		return nil, err
 	}
 
 	return d, nil
 }
 
-func parseC4Lines(d *C4Diagram, lines []string, currentBoundary *Boundary) (int, error) {
-	i := 0
-	for i < len(lines) {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			i++
+func parseStatements(s *parser.Scanner, d *C4Diagram, currentBoundary *Boundary) error {
+	for !s.AtEnd() {
+		s.SkipNewlines()
+		if s.AtEnd() {
+			break
+		}
+
+		tok := s.Peek()
+
+		// End of boundary: '}'
+		if tok.Kind == parser.TokenRBrace {
+			s.Next()
+			return nil
+		}
+
+		if tok.Kind != parser.TokenIdent {
+			parser.SkipToEndOfLine(s)
 			continue
 		}
 
-		// End of boundary block
-		if endRegex.MatchString(trimmed) {
-			return i + 1, nil
+		name := tok.Text
+
+		// Check for boundary types
+		if isBoundaryFunc(name) {
+			if err := parseBoundary(s, d, currentBoundary); err != nil {
+				return err
+			}
+			continue
 		}
 
-		// Boundary
-		if m := boundaryRegex.FindStringSubmatch(trimmed); m != nil {
-			b := &Boundary{
-				Alias: m[1],
-				Label: m[2],
-			}
-			i++
-			consumed, err := parseC4Lines(d, lines[i:], b)
-			if err != nil {
-				return 0, err
-			}
-			i += consumed
-			if currentBoundary != nil {
-				currentBoundary.Boundaries = append(currentBoundary.Boundaries, b)
+		// Check for element functions
+		if kind := elementKind(name); kind != "" {
+			elem := parseElement(s, kind)
+			if elem != nil {
+				addElement(d, currentBoundary, elem)
 			} else {
-				d.Boundaries = append(d.Boundaries, b)
+				parser.SkipToEndOfLine(s)
 			}
 			continue
 		}
 
-		// Person
-		if m := personRegex.FindStringSubmatch(trimmed); m != nil {
-			elem := &Element{Alias: m[1], Label: m[2], Description: m[3], Kind: "person"}
-			addElement(d, currentBoundary, elem)
-			i++
-			continue
-		}
-
-		// Component (check before Container since Container regex might match)
-		if m := componentRegex.FindStringSubmatch(trimmed); m != nil && strings.Contains(trimmed, "Component") {
-			elem := &Element{Alias: m[1], Label: m[2], Technology: m[3], Description: m[4], Kind: "component"}
-			addElement(d, currentBoundary, elem)
-			i++
-			continue
-		}
-
-		// Container
-		if m := containerRegex.FindStringSubmatch(trimmed); m != nil && strings.Contains(trimmed, "Container") {
-			elem := &Element{Alias: m[1], Label: m[2], Technology: m[3], Description: m[4], Kind: "container"}
-			addElement(d, currentBoundary, elem)
-			i++
-			continue
-		}
-
-		// System
-		if m := systemRegex.FindStringSubmatch(trimmed); m != nil {
-			elem := &Element{Alias: m[1], Label: m[2], Description: m[3], Kind: "system"}
-			addElement(d, currentBoundary, elem)
-			i++
-			continue
-		}
-
-		// Relationship
-		if m := relRegex.FindStringSubmatch(trimmed); m != nil {
-			rel := &Relationship{From: m[1], To: m[2], Label: m[3], Technology: m[4]}
-			d.Relationships = append(d.Relationships, rel)
-			i++
+		// Check for relationship functions
+		if isRelFunc(name) {
+			rel := parseRelationship(s)
+			if rel != nil {
+				d.Relationships = append(d.Relationships, rel)
+			} else {
+				parser.SkipToEndOfLine(s)
+			}
 			continue
 		}
 
 		// Skip unrecognized lines
-		i++
+		parser.SkipToEndOfLine(s)
 	}
-	return i, nil
+	return nil
+}
+
+func isBoundaryFunc(name string) bool {
+	switch name {
+	case "Enterprise_Boundary", "System_Boundary", "Container_Boundary", "Boundary":
+		return true
+	}
+	return false
+}
+
+func elementKind(name string) string {
+	switch name {
+	case "Person", "Person_Ext":
+		return "person"
+	case "System", "System_Ext":
+		return "system"
+	case "Container", "Container_Ext", "ContainerDb", "ContainerQueue":
+		return "container"
+	case "Component", "Component_Ext", "ComponentDb", "ComponentQueue":
+		return "component"
+	}
+	return ""
+}
+
+func isRelFunc(name string) bool {
+	switch name {
+	case "Rel", "Rel_Back", "Rel_Neighbor", "Rel_Back_Neighbor", "BiRel":
+		return true
+	}
+	return false
+}
+
+// parseFuncName consumes a function-like identifier, possibly with underscore parts.
+// e.g., "Person_Ext" → tokenizes as Ident("Person") Text("_") Ident("Ext") but
+// actually our scanner treats underscores as part of identifiers, so it's one token.
+func parseFuncName(s *parser.Scanner) string {
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent {
+		return ""
+	}
+	return s.Next().Text
+}
+
+// parseArgs parses a comma-separated argument list inside parentheses.
+// Returns up to maxArgs arguments (strings or identifiers). Already consumed '('.
+func parseArgs(s *parser.Scanner, maxArgs int) []string {
+	var args []string
+	for len(args) < maxArgs {
+		s.SkipWhitespace()
+		tok := s.Peek()
+		if tok.Kind == parser.TokenRParen || tok.Kind == parser.TokenEOF || tok.Kind == parser.TokenNewline {
+			break
+		}
+		if tok.Kind == parser.TokenString {
+			args = append(args, s.Next().Text)
+		} else if tok.Kind == parser.TokenIdent || tok.Kind == parser.TokenNumber {
+			args = append(args, s.Next().Text)
+		} else {
+			break
+		}
+		s.SkipWhitespace()
+		if s.Peek().Kind == parser.TokenComma {
+			s.Next()
+		}
+	}
+	// Consume closing paren
+	if s.Peek().Kind == parser.TokenRParen {
+		s.Next()
+	}
+	return args
+}
+
+// parseElement parses: FuncName(alias, "label" [, "tech"] [, "description"])
+func parseElement(s *parser.Scanner, kind string) *Element {
+	s.Next() // consume function name
+	s.SkipWhitespace()
+	if s.Peek().Kind != parser.TokenLParen {
+		return nil
+	}
+	s.Next() // consume '('
+
+	args := parseArgs(s, 4)
+	if len(args) < 2 {
+		return nil
+	}
+
+	elem := &Element{
+		Alias: args[0],
+		Label: args[1],
+		Kind:  kind,
+	}
+	if kind == "container" || kind == "component" {
+		if len(args) >= 3 {
+			elem.Technology = args[2]
+		}
+		if len(args) >= 4 {
+			elem.Description = args[3]
+		}
+	} else {
+		if len(args) >= 3 {
+			elem.Description = args[2]
+		}
+	}
+	return elem
+}
+
+// parseBoundary parses: BoundaryFunc(alias, "label") { ... }
+func parseBoundary(s *parser.Scanner, d *C4Diagram, currentBoundary *Boundary) error {
+	s.Next() // consume function name
+	s.SkipWhitespace()
+	if s.Peek().Kind != parser.TokenLParen {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	s.Next() // consume '('
+
+	args := parseArgs(s, 2)
+	if len(args) < 2 {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+
+	b := &Boundary{
+		Alias: args[0],
+		Label: args[1],
+	}
+
+	s.SkipWhitespace()
+	// Optional '{' on the same line
+	if s.Peek().Kind == parser.TokenLBrace {
+		s.Next()
+	}
+	s.SkipNewlines()
+
+	if err := parseStatements(s, d, b); err != nil {
+		return err
+	}
+
+	if currentBoundary != nil {
+		currentBoundary.Boundaries = append(currentBoundary.Boundaries, b)
+	} else {
+		d.Boundaries = append(d.Boundaries, b)
+	}
+	return nil
+}
+
+// parseRelationship parses: RelFunc(from, to, "label" [, "tech"])
+func parseRelationship(s *parser.Scanner) *Relationship {
+	s.Next() // consume function name
+	s.SkipWhitespace()
+	if s.Peek().Kind != parser.TokenLParen {
+		return nil
+	}
+	s.Next() // consume '('
+
+	args := parseArgs(s, 4)
+	if len(args) < 3 {
+		return nil
+	}
+
+	rel := &Relationship{
+		From:  args[0],
+		To:    args[1],
+		Label: args[2],
+	}
+	if len(args) >= 4 {
+		rel.Technology = args[3]
+	}
+	return rel
 }
 
 func addElement(d *C4Diagram, boundary *Boundary, elem *Element) {
