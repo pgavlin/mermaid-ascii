@@ -3,37 +3,13 @@ package classdiagram
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
 // ClassDiagramKeyword is the Mermaid keyword that identifies a class diagram.
 const ClassDiagramKeyword = "classDiagram"
-
-var (
-	// classBlockRegex matches: class ClassName {
-	classBlockRegex = regexp.MustCompile(`^\s*class\s+(\w+)\s*\{\s*$`)
-
-	// classInlineRegex matches: class ClassName
-	classInlineRegex = regexp.MustCompile(`^\s*class\s+(\w+)\s*$`)
-
-	// memberRegex matches: +String name, -privateMethod(), #protectedField, ~packageField
-	memberRegex = regexp.MustCompile(`^\s*([+\-#~]?)(\w[\w<>\[\],\s]*?)(?:\(([^)]*)\))?\s*(\w+)?\s*$`)
-
-	// relationshipRegex matches relationships like:
-	// Animal <|-- Dog
-	// Animal *-- Leg
-	// Animal o-- Lake
-	// Animal ..> Water
-	// Animal --> Food
-	// Animal "1" --> "*" Food : eats
-	relationshipRegex = regexp.MustCompile(`^\s*(\w+)\s*(?:"([^"]*)")?\s*(<\|--|<\|\.\.|\*--|\*\.\.|o--|o\.\.|-->|--|\.\.|\.\.>|--\*|--o|<--)\s*(?:"([^"]*)")?\s*(\w+)\s*(?::\s*(.+))?\s*$`)
-
-	// closingBraceRegex matches a closing brace
-	closingBraceRegex = regexp.MustCompile(`^\s*\}\s*$`)
-)
 
 // RelationType represents the type of relationship between classes.
 type RelationType int
@@ -78,12 +54,12 @@ type Class struct {
 
 // Relationship represents a relationship between two classes.
 type Relationship struct {
-	From         string
-	To           string
-	Type         RelationType
-	Label        string
-	FromLabel    string // cardinality label near "from"
-	ToLabel      string // cardinality label near "to"
+	From      string
+	To        string
+	Type      RelationType
+	Label     string
+	FromLabel string // cardinality label near "from"
+	ToLabel   string // cardinality label near "to"
 }
 
 // ClassDiagram represents a parsed class diagram.
@@ -113,17 +89,15 @@ func Parse(input string) (*ClassDiagram, error) {
 		return nil, fmt.Errorf("empty input")
 	}
 
-	rawLines := diagram.SplitLines(input)
-	lines := diagram.RemoveComments(rawLines)
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("no content found")
-	}
+	s := parser.NewScanner(input)
+	s.SkipNewlines()
 
-	first := strings.TrimSpace(lines[0])
-	if !strings.HasPrefix(first, ClassDiagramKeyword) {
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent || tok.Text != ClassDiagramKeyword {
 		return nil, fmt.Errorf("expected %q keyword", ClassDiagramKeyword)
 	}
-	lines = lines[1:]
+	s.Next()
+	s.SkipNewlines()
 
 	cd := &ClassDiagram{
 		Classes:       []*Class{},
@@ -131,73 +105,29 @@ func Parse(input string) (*ClassDiagram, error) {
 		classMap:      make(map[string]*Class),
 	}
 
-	i := 0
-	for i < len(lines) {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			i++
+	for !s.AtEnd() {
+		s.SkipNewlines()
+		if s.AtEnd() {
+			break
+		}
+
+		tok := s.Peek()
+
+		// class keyword
+		if tok.Kind == parser.TokenIdent && tok.Text == "class" {
+			cd.parseClass(s)
 			continue
 		}
 
-		// Check for class block: class Name {
-		if match := classBlockRegex.FindStringSubmatch(line); match != nil {
-			className := match[1]
-			cls := cd.getOrCreateClass(className)
-			i++
-			// Parse members until closing brace
-			for i < len(lines) {
-				memberLine := strings.TrimSpace(lines[i])
-				if closingBraceRegex.MatchString(memberLine) {
-					i++
-					break
-				}
-				if memberLine == "" {
-					i++
-					continue
-				}
-				member := parseMember(memberLine)
-				if member != nil {
-					cls.Members = append(cls.Members, member)
-				}
-				i++
+		// Try to parse relationship: From [cardinality] arrow [cardinality] To [: label]
+		if tok.Kind == parser.TokenIdent {
+			if cd.tryParseRelationship(s) {
+				continue
 			}
-			continue
 		}
 
-		// Check for inline class declaration: class Name
-		if match := classInlineRegex.FindStringSubmatch(line); match != nil {
-			cd.getOrCreateClass(match[1])
-			i++
-			continue
-		}
-
-		// Check for relationship
-		if match := relationshipRegex.FindStringSubmatch(line); match != nil {
-			from := match[1]
-			fromLabel := match[2]
-			arrow := match[3]
-			toLabel := match[4]
-			to := match[5]
-			label := strings.TrimSpace(match[6])
-
-			cd.getOrCreateClass(from)
-			cd.getOrCreateClass(to)
-
-			relType := parseRelationType(arrow)
-			cd.Relationships = append(cd.Relationships, &Relationship{
-				From:      from,
-				To:        to,
-				Type:      relType,
-				Label:     label,
-				FromLabel: fromLabel,
-				ToLabel:   toLabel,
-			})
-			i++
-			continue
-		}
-
-		// Unknown line, skip
-		i++
+		// Skip unrecognized lines
+		parser.SkipToEndOfLine(s)
 	}
 
 	if len(cd.Classes) == 0 {
@@ -205,6 +135,201 @@ func Parse(input string) (*ClassDiagram, error) {
 	}
 
 	return cd, nil
+}
+
+func (cd *ClassDiagram) parseClass(s *parser.Scanner) {
+	s.Next() // consume "class"
+	s.SkipWhitespace()
+
+	nameTok := s.Peek()
+	if nameTok.Kind != parser.TokenIdent {
+		parser.SkipToEndOfLine(s)
+		return
+	}
+	className := s.Next().Text
+	cls := cd.getOrCreateClass(className)
+	s.SkipWhitespace()
+
+	// Check for '{' — block with members
+	if s.Peek().Kind == parser.TokenLBrace {
+		s.Next() // consume '{'
+		s.SkipNewlines()
+		for !s.AtEnd() {
+			tok := s.Peek()
+			if tok.Kind == parser.TokenRBrace {
+				s.Next()
+				break
+			}
+			// Parse member line
+			memberText := strings.TrimSpace(parser.ConsumeRestOfLine(s))
+			s.SkipNewlines()
+			if memberText == "" {
+				continue
+			}
+			member := parseMember(memberText)
+			if member != nil {
+				cls.Members = append(cls.Members, member)
+			}
+		}
+		return
+	}
+
+	// Inline class (no body)
+}
+
+// Known arrow patterns for class diagrams.
+var classArrows = []string{
+	"<|--", "<|..", "*--", "*..","o--", "o..", "-->", "<--", "--*", "--o", "..>", "--", "..",
+}
+
+func (cd *ClassDiagram) tryParseRelationship(s *parser.Scanner) bool {
+	saved := s.Save()
+
+	// From class name
+	fromTok := s.Peek()
+	if fromTok.Kind != parser.TokenIdent {
+		return false
+	}
+	from := s.Next().Text
+	s.SkipWhitespace()
+
+	// Optional from cardinality: "1"
+	fromLabel := ""
+	if s.Peek().Kind == parser.TokenString {
+		fromLabel = s.Next().Text
+		s.SkipWhitespace()
+	}
+
+	// Collect arrow tokens — arrows like <|--, ..>, o--, etc. are multiple tokens
+	arrowText := collectArrow(s)
+	if arrowText == "" {
+		s.Restore(saved)
+		return false
+	}
+
+	// Validate it's a known arrow
+	relType, ok := matchArrow(arrowText)
+	if !ok {
+		s.Restore(saved)
+		return false
+	}
+
+	s.SkipWhitespace()
+
+	// Optional to cardinality: "*"
+	toLabel := ""
+	if s.Peek().Kind == parser.TokenString {
+		toLabel = s.Next().Text
+		s.SkipWhitespace()
+	}
+
+	// To class name
+	toTok := s.Peek()
+	if toTok.Kind != parser.TokenIdent {
+		s.Restore(saved)
+		return false
+	}
+	to := s.Next().Text
+	s.SkipWhitespace()
+
+	// Optional label: : text
+	label := ""
+	if s.Peek().Kind == parser.TokenColon {
+		s.Next()
+		s.SkipWhitespace()
+		label = strings.TrimSpace(parser.ConsumeRestOfLine(s))
+	}
+
+	cd.getOrCreateClass(from)
+	cd.getOrCreateClass(to)
+	cd.Relationships = append(cd.Relationships, &Relationship{
+		From:      from,
+		To:        to,
+		Type:      relType,
+		Label:     label,
+		FromLabel: fromLabel,
+		ToLabel:   toLabel,
+	})
+	return true
+}
+
+// collectArrow greedily collects tokens that form an arrow pattern.
+// Arrows like <|-- tokenize as Operator("<") Pipe Operator("--") or similar combos.
+// *-- tokenizes as Text("*") Operator("--"), o-- as Ident("o") Operator("--").
+func collectArrow(s *parser.Scanner) string {
+	var parts []string
+	for {
+		tok := s.Peek()
+		switch tok.Kind {
+		case parser.TokenOperator:
+			parts = append(parts, s.Next().Text)
+		case parser.TokenPipe:
+			parts = append(parts, s.Next().Text)
+		case parser.TokenDot:
+			parts = append(parts, s.Next().Text)
+		case parser.TokenText:
+			// Handle * in *-- arrows
+			if tok.Text == "*" {
+				parts = append(parts, s.Next().Text)
+				continue
+			}
+			return strings.Join(parts, "")
+		case parser.TokenIdent:
+			// Handle o in o-- arrows (only at start or end of arrow)
+			if tok.Text == "o" && (len(parts) == 0 || len(parts) > 0) {
+				// Check if followed by operator chars (at start) or preceded by operator chars (at end)
+				saved := s.Save()
+				parts = append(parts, s.Next().Text)
+				// If the next token is an operator or this completes a valid arrow, keep it
+				next := s.Peek()
+				if next.Kind == parser.TokenOperator || next.Kind == parser.TokenDot {
+					continue
+				}
+				// Check if what we have so far + "o" is a valid arrow
+				candidate := strings.Join(parts, "")
+				if _, ok := matchArrow(candidate); ok {
+					return candidate
+				}
+				// Not valid — restore
+				s.Restore(saved)
+				parts = parts[:len(parts)-1]
+				return strings.Join(parts, "")
+			}
+			return strings.Join(parts, "")
+		default:
+			return strings.Join(parts, "")
+		}
+	}
+}
+
+func parseRelationType(arrow string) RelationType {
+	rt, ok := matchArrow(arrow)
+	if !ok {
+		return Association
+	}
+	return rt
+}
+
+func matchArrow(text string) (RelationType, bool) {
+	switch text {
+	case "<|--":
+		return Inheritance, true
+	case "<|..":
+		return Realization, true
+	case "*--", "--*":
+		return Composition, true
+	case "o--", "--o":
+		return Aggregation, true
+	case "..>":
+		return Dependency, true
+	case "-->", "<--":
+		return Association, true
+	case "--":
+		return Link, true
+	case "..", "*..":
+		return DottedLink, true
+	}
+	return 0, false
 }
 
 func (cd *ClassDiagram) getOrCreateClass(name string) *Class {
@@ -290,27 +415,4 @@ func parseMember(line string) *Member {
 	}
 
 	return nil
-}
-
-func parseRelationType(arrow string) RelationType {
-	switch arrow {
-	case "<|--":
-		return Inheritance
-	case "<|..":
-		return Realization
-	case "*--", "--*":
-		return Composition
-	case "o--", "--o":
-		return Aggregation
-	case "..>":
-		return Dependency
-	case "-->", "<--":
-		return Association
-	case "--":
-		return Link
-	case "..", "*..":
-		return DottedLink
-	default:
-		return Association
-	}
 }
