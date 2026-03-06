@@ -4,55 +4,13 @@ package zenuml
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
 // ZenUMLKeyword is the Mermaid keyword that identifies a ZenUML diagram.
 const ZenUMLKeyword = "zenuml"
-
-var (
-	// participantDeclRegex matches "Type Name" declarations like "Client client"
-	participantDeclRegex = regexp.MustCompile(`^\s*(\w+)\s+(\w+)\s*$`)
-
-	// syncMessageRegex matches "target.method(args)" without trailing brace
-	syncMessageRegex = regexp.MustCompile(`^\s*(\w+)\.(\w+)\(([^)]*)\)\s*$`)
-
-	// asyncMessageRegex matches "target.method(args) {" (async block start)
-	asyncMessageRegex = regexp.MustCompile(`^\s*(\w+)\.(\w+)\(([^)]*)\)\s*\{\s*$`)
-
-	// returnRegex matches "return value"
-	returnRegex = regexp.MustCompile(`^\s*return\s+(.*?)\s*$`)
-
-	// closeBraceRegex matches a closing brace
-	closeBraceRegex = regexp.MustCompile(`^\s*\}\s*$`)
-
-	// arrowMessageRegex matches "A->B: message text"
-	arrowMessageRegex = regexp.MustCompile(`^\s*(\w+)\s*->\s*(\w+)\s*:\s*(.+?)\s*$`)
-
-	// arrowBlockRegex matches "A->B: message {"
-	arrowBlockRegex = regexp.MustCompile(`^\s*(\w+)\s*->\s*(\w+)\s*:\s*(.+?)\s*\{\s*$`)
-
-	// singleParticipantRegex matches a standalone single word (implicit participant)
-	singleParticipantRegex = regexp.MustCompile(`^\s*(\w+)\s*$`)
-
-	// aliasRegex matches "A as Alice"
-	aliasRegex = regexp.MustCompile(`^\s*(\w+)\s+as\s+(\w+)\s*$`)
-
-	// annotatorRegex matches "@Actor Alice" or "@Database Bob"
-	annotatorRegex = regexp.MustCompile(`^\s*@(\w+)\s+(\w+)\s*$`)
-
-	// controlFlowRegex matches "while(cond) {", "if(cond) {", "opt {", etc.
-	controlFlowRegex = regexp.MustCompile(`^\s*(while|if|for|forEach|loop|opt|par|try)\s*(\([^)]*\))?\s*\{\s*$`)
-
-	// continuationRegex matches "} else {", "} catch {", "} finally {"
-	continuationRegex = regexp.MustCompile(`^\s*\}\s*(else|catch|finally)\s*(\([^)]*\))?\s*\{\s*$`)
-
-	// newRegex matches "new A1" or "new A2(args)"
-	newRegex = regexp.MustCompile(`^\s*new\s+(\w+)(?:\(([^)]*)\))?\s*$`)
-)
 
 // MessageType distinguishes sync, async, and return messages.
 type MessageType int
@@ -103,6 +61,11 @@ func IsZenUML(input string) bool {
 	return false
 }
 
+type zenParser struct {
+	d    *ZenUMLDiagram
+	pMap map[string]*Participant
+}
+
 // Parse parses ZenUML input text into a ZenUMLDiagram.
 func Parse(input string) (*ZenUMLDiagram, error) {
 	input = strings.TrimSpace(input)
@@ -110,321 +73,579 @@ func Parse(input string) (*ZenUMLDiagram, error) {
 		return nil, fmt.Errorf("empty input")
 	}
 
-	rawLines := diagram.SplitLines(input)
-	lines := diagram.RemoveComments(rawLines)
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("no content found")
-	}
+	s := parser.NewScanner(input)
+	s.SkipNewlines()
 
-	if !strings.HasPrefix(strings.TrimSpace(lines[0]), ZenUMLKeyword) {
+	// Expect "zenuml" keyword
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent || tok.Text != ZenUMLKeyword {
 		return nil, fmt.Errorf("expected %q keyword", ZenUMLKeyword)
 	}
-	lines = lines[1:]
+	s.Next()
+	s.SkipNewlines()
 
-	d := &ZenUMLDiagram{
-		Participants: []*Participant{},
-		Messages:     []*Message{},
+	p := &zenParser{
+		d: &ZenUMLDiagram{
+			Participants: []*Participant{},
+			Messages:     []*Message{},
+		},
+		pMap: make(map[string]*Participant),
 	}
-	participantMap := make(map[string]*Participant)
 
-	messages, _, err := parseLines(lines, d, participantMap, false)
+	messages, err := p.parseStatements(s, false)
 	if err != nil {
 		return nil, err
 	}
-	d.Messages = messages
+	p.d.Messages = messages
 
-	if len(d.Participants) == 0 {
+	if len(p.d.Participants) == 0 {
 		return nil, fmt.Errorf("no participants found")
 	}
 
-	return d, nil
+	return p.d, nil
 }
 
-// parseLines parses lines into messages. When inBlock is true, parsing stops at '}'.
-func parseLines(lines []string, d *ZenUMLDiagram, pMap map[string]*Participant, inBlock bool) ([]*Message, int, error) {
+func (p *zenParser) parseStatements(s *parser.Scanner, inBlock bool) ([]*Message, error) {
 	var messages []*Message
-	i := 0
-	for i < len(lines) {
-		trimmed := strings.TrimSpace(lines[i])
 
-		// 1. Empty line
-		if trimmed == "" {
-			i++
+	for !s.AtEnd() {
+		s.SkipNewlines()
+		if s.AtEnd() {
+			break
+		}
+
+		tok := s.Peek()
+
+		// Close brace — end of block
+		if tok.Kind == parser.TokenRBrace {
+			if inBlock {
+				s.Next() // consume '}'
+				// Check for continuation: } else {, } catch {, } finally {
+				// Don't consume continuation here — let the caller handle it
+				return messages, nil
+			}
+			s.Next()
 			continue
 		}
 
-		// 2. Block end — plain '}'
-		if inBlock && closeBraceRegex.MatchString(trimmed) {
-			return messages, i, nil
+		// Annotator: @Type Name
+		if tok.Kind == parser.TokenAt {
+			if err := p.parseAnnotator(s); err != nil {
+				return nil, err
+			}
+			continue
 		}
 
-		// 2b. Continuation — '} else {', '} catch {', '} finally {'
-		// When inside a block, a continuation means the current block is done.
-		if inBlock && continuationRegex.MatchString(trimmed) {
-			return messages, i, nil
+		if tok.Kind != parser.TokenIdent {
+			parser.SkipToEndOfLine(s)
+			continue
 		}
 
-		// 3. Return statement
-		if match := returnRegex.FindStringSubmatch(trimmed); match != nil {
-			var from, to *Participant
-			if len(messages) > 0 {
-				last := messages[len(messages)-1]
-				from = last.To
-				to = last.From
-			} else if len(d.Participants) > 0 {
-				from = d.Participants[0]
-			}
-			msg := &Message{
-				From:  from,
-				To:    to,
-				Label: strings.TrimSpace(match[1]),
-				Type:  ReturnMessage,
-			}
+		// Keyword-based dispatch
+		switch tok.Text {
+		case "return":
+			msg := p.parseReturn(s, messages)
 			messages = append(messages, msg)
-			i++
 			continue
-		}
-
-		// 4. Arrow message with block: A->B: message {
-		if match := arrowBlockRegex.FindStringSubmatch(trimmed); match != nil {
-			fromP := getOrCreateParticipant(match[1], d, pMap)
-			toP := getOrCreateParticipant(match[2], d, pMap)
-			label := strings.TrimSpace(match[3])
-
-			i++
-			nested, consumed, err := parseLines(lines[i:], d, pMap, true)
+		case "new":
+			msg, err := p.parseNew(s)
 			if err != nil {
-				return nil, 0, err
-			}
-			i += consumed
-			if i < len(lines) {
-				i++ // consume '}'
-			}
-
-			msg := &Message{
-				From:   fromP,
-				To:     toP,
-				Label:  label,
-				Type:   AsyncMessage,
-				Nested: nested,
+				return nil, err
 			}
 			messages = append(messages, msg)
 			continue
-		}
-
-		// 5. Arrow message: A->B: message text
-		if match := arrowMessageRegex.FindStringSubmatch(trimmed); match != nil {
-			fromP := getOrCreateParticipant(match[1], d, pMap)
-			toP := getOrCreateParticipant(match[2], d, pMap)
-			label := strings.TrimSpace(match[3])
-
-			msg := &Message{
-				From:  fromP,
-				To:    toP,
-				Label: label,
-				Type:  SyncMessage,
-			}
-			messages = append(messages, msg)
-			i++
-			continue
-		}
-
-		// 6. Async message: target.method(args) {
-		if match := asyncMessageRegex.FindStringSubmatch(trimmed); match != nil {
-			target := match[1]
-			method := match[2]
-			args := strings.TrimSpace(match[3])
-
-			to := getOrCreateParticipant(target, d, pMap)
-			from := inferCaller(d, to)
-
-			i++
-			nested, consumed, err := parseLines(lines[i:], d, pMap, true)
+		case "while", "if", "for", "forEach", "loop", "opt", "par", "try":
+			nested, err := p.parseControlFlow(s)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
-			i += consumed
-			if i < len(lines) {
-				i++ // consume '}'
-			}
-
-			msg := &Message{
-				From:   from,
-				To:     to,
-				Method: method,
-				Args:   args,
-				Type:   AsyncMessage,
-				Nested: nested,
-			}
-			messages = append(messages, msg)
-			continue
-		}
-
-		// 7. Sync message: target.method(args)
-		if match := syncMessageRegex.FindStringSubmatch(trimmed); match != nil {
-			target := match[1]
-			method := match[2]
-			args := strings.TrimSpace(match[3])
-
-			to := getOrCreateParticipant(target, d, pMap)
-			from := inferCaller(d, to)
-
-			msg := &Message{
-				From:   from,
-				To:     to,
-				Method: method,
-				Args:   args,
-				Type:   SyncMessage,
-			}
-			messages = append(messages, msg)
-			i++
-			continue
-		}
-
-		// 8. Control flow block: while(cond) {, if(cond) {, opt {, etc.
-		if controlFlowRegex.MatchString(trimmed) {
-			i++ // consume the opening line
-			nested, consumed, err := parseLines(lines[i:], d, pMap, true)
-			if err != nil {
-				return nil, 0, err
-			}
-			i += consumed
 			messages = append(messages, nested...)
-
-			// consume the closing '}' or continuation
-			if i < len(lines) {
-				closeLine := strings.TrimSpace(lines[i])
-				if closeBraceRegex.MatchString(closeLine) {
-					i++ // consume plain '}'
-				}
-				// Check for continuations: } else {, } catch {, } finally {
-				for i < len(lines) {
-					cl := strings.TrimSpace(lines[i])
-					if continuationRegex.MatchString(cl) {
-						i++ // consume the continuation line
-						nested2, consumed2, err := parseLines(lines[i:], d, pMap, true)
-						if err != nil {
-							return nil, 0, err
-						}
-						i += consumed2
-						messages = append(messages, nested2...)
-						// consume the closing '}'
-						if i < len(lines) && closeBraceRegex.MatchString(strings.TrimSpace(lines[i])) {
-							i++
-						}
-					} else {
-						break
-					}
-				}
-			}
 			continue
 		}
 
-		// 9. New/create: new A1 or new A2(args)
-		if match := newRegex.FindStringSubmatch(trimmed); match != nil {
-			target := match[1]
-			args := ""
-			if len(match) > 2 {
-				args = strings.TrimSpace(match[2])
-			}
-			to := getOrCreateParticipant(target, d, pMap)
-			from := inferCaller(d, to)
-
-			msg := &Message{
-				From:   from,
-				To:     to,
-				Method: "new",
-				Args:   args,
-				Type:   SyncMessage,
-			}
-			messages = append(messages, msg)
-			i++
+		// Try arrow message: A->B: ...
+		if arrowMsg, ok := p.tryParseArrowMessage(s); ok {
+			messages = append(messages, arrowMsg)
 			continue
 		}
 
-		// 10. Annotator: @Actor Alice, @Database Bob
-		if match := annotatorRegex.FindStringSubmatch(trimmed); match != nil {
-			typeName := match[1]
-			id := match[2]
-			if _, exists := pMap[id]; !exists {
-				p := &Participant{
-					TypeName: typeName,
-					ID:       id,
-					Index:    len(d.Participants),
-				}
-				d.Participants = append(d.Participants, p)
-				pMap[id] = p
-			}
-			i++
+		// Try dot-call message: target.method(args) [{ ... }]
+		if dotMsg, ok := p.tryParseDotCall(s); ok {
+			messages = append(messages, dotMsg)
 			continue
 		}
 
-		// 11. Alias: A as Alice
-		if match := aliasRegex.FindStringSubmatch(trimmed); match != nil {
-			id := match[1]
-			displayName := match[2]
-			if _, exists := pMap[id]; !exists {
-				p := &Participant{
-					TypeName: displayName,
-					ID:       id,
-					Index:    len(d.Participants),
-				}
-				d.Participants = append(d.Participants, p)
-				pMap[id] = p
-			}
-			i++
+		// Try alias: A as Name
+		if p.tryParseAlias(s) {
 			continue
 		}
 
-		// 12. Participant declaration: Type Name (two words, first not reserved)
-		if match := participantDeclRegex.FindStringSubmatch(trimmed); match != nil {
-			typeName := match[1]
-			id := match[2]
-
-			if isReservedWord(typeName) {
-				return nil, 0, fmt.Errorf("unexpected line: %q", trimmed)
-			}
-
-			// "as" in second position is handled by aliasRegex above
-			if id == "as" {
-				return nil, 0, fmt.Errorf("unexpected line: %q", trimmed)
-			}
-
-			if _, exists := pMap[id]; !exists {
-				p := &Participant{
-					TypeName: typeName,
-					ID:       id,
-					Index:    len(d.Participants),
-				}
-				d.Participants = append(d.Participants, p)
-				pMap[id] = p
-			}
-			i++
+		// Try participant declaration: Type Name (two idents, first not reserved)
+		if p.tryParseParticipantDecl(s) {
 			continue
 		}
 
-		// 13. Standalone participant: single word (must be last to avoid matching keywords)
-		if match := singleParticipantRegex.FindStringSubmatch(trimmed); match != nil {
-			id := match[1]
-			if !isReservedWord(id) {
-				if _, exists := pMap[id]; !exists {
-					p := &Participant{
-						TypeName: id,
-						ID:       id,
-						Index:    len(d.Participants),
-					}
-					d.Participants = append(d.Participants, p)
-					pMap[id] = p
-				}
-				i++
-				continue
-			}
+		// Standalone participant: single ident
+		if p.tryParseStandaloneParticipant(s) {
+			continue
 		}
 
-		return nil, 0, fmt.Errorf("unexpected line: %q", trimmed)
+		// Unknown — skip to end of line
+		parser.SkipToEndOfLine(s)
 	}
 
-	return messages, i, nil
+	return messages, nil
+}
+
+// parseAnnotator handles: @TypeName ID
+func (p *zenParser) parseAnnotator(s *parser.Scanner) error {
+	s.Next() // consume '@'
+	// No whitespace skip — type name follows immediately
+	typeTok := s.Peek()
+	if typeTok.Kind != parser.TokenIdent {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	typeName := s.Next().Text
+	s.SkipWhitespace()
+
+	idTok := s.Peek()
+	if idTok.Kind != parser.TokenIdent {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	id := s.Next().Text
+
+	if _, exists := p.pMap[id]; !exists {
+		pt := &Participant{
+			TypeName: typeName,
+			ID:       id,
+			Index:    len(p.d.Participants),
+		}
+		p.d.Participants = append(p.d.Participants, pt)
+		p.pMap[id] = pt
+	}
+	return nil
+}
+
+// parseReturn handles: return value
+func (p *zenParser) parseReturn(s *parser.Scanner, priorMessages []*Message) *Message {
+	s.Next() // consume "return"
+	s.SkipWhitespace()
+	label := strings.TrimSpace(parser.ConsumeRestOfLine(s))
+
+	var from, to *Participant
+	if len(priorMessages) > 0 {
+		last := priorMessages[len(priorMessages)-1]
+		from = last.To
+		to = last.From
+	} else if len(p.d.Participants) > 0 {
+		from = p.d.Participants[0]
+	}
+
+	return &Message{
+		From:  from,
+		To:    to,
+		Label: label,
+		Type:  ReturnMessage,
+	}
+}
+
+// parseNew handles: new Target or new Target(args)
+func (p *zenParser) parseNew(s *parser.Scanner) (*Message, error) {
+	s.Next() // consume "new"
+	s.SkipWhitespace()
+
+	targetTok := s.Peek()
+	if targetTok.Kind != parser.TokenIdent {
+		return nil, parser.Errorf(targetTok.Pos, "expected target after 'new'")
+	}
+	target := s.Next().Text
+
+	var args string
+	if s.Peek().Kind == parser.TokenLParen {
+		s.Next() // consume '('
+		args = p.collectUntilRParen(s)
+	}
+
+	to := p.getOrCreateParticipant(target)
+	from := inferCaller(p.d, to)
+
+	return &Message{
+		From:   from,
+		To:     to,
+		Method: "new",
+		Args:   args,
+		Type:   SyncMessage,
+	}, nil
+}
+
+// parseControlFlow handles: while(cond) { ... }, if(cond) { ... } else { ... }, etc.
+func (p *zenParser) parseControlFlow(s *parser.Scanner) ([]*Message, error) {
+	s.Next() // consume the keyword (while/if/for/etc.)
+	s.SkipWhitespace()
+
+	// Optional condition in parens
+	if s.Peek().Kind == parser.TokenLParen {
+		s.Next() // consume '('
+		p.skipUntilRParen(s)
+		s.SkipWhitespace()
+	}
+
+	// Expect '{'
+	if s.Peek().Kind != parser.TokenLBrace {
+		parser.SkipToEndOfLine(s)
+		return nil, nil
+	}
+	s.Next() // consume '{'
+
+	nested, err := p.parseStatements(s, true)
+	if err != nil {
+		return nil, err
+	}
+	var messages []*Message
+	messages = append(messages, nested...)
+
+	// Handle continuations: } else {, } catch {, } finally {
+	for {
+		s.SkipWhitespace()
+		tok := s.Peek()
+		if tok.Kind != parser.TokenIdent {
+			break
+		}
+		if tok.Text != "else" && tok.Text != "catch" && tok.Text != "finally" {
+			break
+		}
+		s.Next() // consume continuation keyword
+		s.SkipWhitespace()
+
+		// Optional condition in parens (e.g., catch(e))
+		if s.Peek().Kind == parser.TokenLParen {
+			s.Next()
+			p.skipUntilRParen(s)
+			s.SkipWhitespace()
+		}
+
+		// Expect '{'
+		if s.Peek().Kind != parser.TokenLBrace {
+			break
+		}
+		s.Next() // consume '{'
+
+		nested2, err := p.parseStatements(s, true)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, nested2...)
+	}
+
+	return messages, nil
+}
+
+// tryParseArrowMessage attempts: A->B: message [{ ... }]
+func (p *zenParser) tryParseArrowMessage(s *parser.Scanner) (*Message, bool) {
+	saved := s.Save()
+
+	fromTok := s.Peek()
+	if fromTok.Kind != parser.TokenIdent {
+		return nil, false
+	}
+	fromID := s.Next().Text
+
+	// Expect "->" operator
+	opTok := s.Peek()
+	if opTok.Kind != parser.TokenOperator || opTok.Text != "->" {
+		s.Restore(saved)
+		return nil, false
+	}
+	s.Next() // consume "->"
+
+	toTok := s.Peek()
+	if toTok.Kind != parser.TokenIdent {
+		s.Restore(saved)
+		return nil, false
+	}
+	toID := s.Next().Text
+	s.SkipWhitespace()
+
+	// Expect ":"
+	if s.Peek().Kind != parser.TokenColon {
+		s.Restore(saved)
+		return nil, false
+	}
+	s.Next() // consume ":"
+	s.SkipWhitespace()
+
+	// Collect label text until newline or '{'
+	label := p.collectLabelUntilBrace(s)
+
+	fromP := p.getOrCreateParticipant(fromID)
+	toP := p.getOrCreateParticipant(toID)
+
+	// Check for block
+	if s.Peek().Kind == parser.TokenLBrace {
+		s.Next() // consume '{'
+		nested, err := p.parseStatements(s, true)
+		if err != nil {
+			return nil, false
+		}
+		return &Message{
+			From:   fromP,
+			To:     toP,
+			Label:  label,
+			Type:   AsyncMessage,
+			Nested: nested,
+		}, true
+	}
+
+	return &Message{
+		From:  fromP,
+		To:    toP,
+		Label: label,
+		Type:  SyncMessage,
+	}, true
+}
+
+// tryParseDotCall attempts: target.method(args) [{ ... }]
+func (p *zenParser) tryParseDotCall(s *parser.Scanner) (*Message, bool) {
+	saved := s.Save()
+
+	targetTok := s.Peek()
+	if targetTok.Kind != parser.TokenIdent {
+		return nil, false
+	}
+	target := s.Next().Text
+
+	// Expect '.'
+	if s.Peek().Kind != parser.TokenDot {
+		s.Restore(saved)
+		return nil, false
+	}
+	s.Next() // consume '.'
+
+	methodTok := s.Peek()
+	if methodTok.Kind != parser.TokenIdent {
+		s.Restore(saved)
+		return nil, false
+	}
+	method := s.Next().Text
+
+	// Expect '('
+	if s.Peek().Kind != parser.TokenLParen {
+		s.Restore(saved)
+		return nil, false
+	}
+	s.Next() // consume '('
+	args := p.collectUntilRParen(s)
+	s.SkipWhitespace()
+
+	to := p.getOrCreateParticipant(target)
+	from := inferCaller(p.d, to)
+
+	// Check for async block '{'
+	if s.Peek().Kind == parser.TokenLBrace {
+		s.Next() // consume '{'
+		nested, err := p.parseStatements(s, true)
+		if err != nil {
+			return nil, false
+		}
+		return &Message{
+			From:   from,
+			To:     to,
+			Method: method,
+			Args:   args,
+			Type:   AsyncMessage,
+			Nested: nested,
+		}, true
+	}
+
+	return &Message{
+		From:   from,
+		To:     to,
+		Method: method,
+		Args:   args,
+		Type:   SyncMessage,
+	}, true
+}
+
+// tryParseAlias attempts: A as DisplayName
+func (p *zenParser) tryParseAlias(s *parser.Scanner) bool {
+	saved := s.Save()
+
+	idTok := s.Peek()
+	if idTok.Kind != parser.TokenIdent {
+		return false
+	}
+	id := s.Next().Text
+	s.SkipWhitespace()
+
+	asTok := s.Peek()
+	if asTok.Kind != parser.TokenIdent || asTok.Text != "as" {
+		s.Restore(saved)
+		return false
+	}
+	s.Next() // consume "as"
+	s.SkipWhitespace()
+
+	nameTok := s.Peek()
+	if nameTok.Kind != parser.TokenIdent {
+		s.Restore(saved)
+		return false
+	}
+	displayName := s.Next().Text
+
+	if _, exists := p.pMap[id]; !exists {
+		pt := &Participant{
+			TypeName: displayName,
+			ID:       id,
+			Index:    len(p.d.Participants),
+		}
+		p.d.Participants = append(p.d.Participants, pt)
+		p.pMap[id] = pt
+	}
+	return true
+}
+
+// tryParseParticipantDecl attempts: TypeName ID (two idents, first not reserved)
+func (p *zenParser) tryParseParticipantDecl(s *parser.Scanner) bool {
+	saved := s.Save()
+
+	typeTok := s.Peek()
+	if typeTok.Kind != parser.TokenIdent {
+		return false
+	}
+	typeName := s.Next().Text
+
+	if isReservedWord(typeName) {
+		s.Restore(saved)
+		return false
+	}
+
+	s.SkipWhitespace()
+
+	idTok := s.Peek()
+	if idTok.Kind != parser.TokenIdent {
+		s.Restore(saved)
+		return false
+	}
+
+	id := idTok.Text
+	if id == "as" {
+		s.Restore(saved)
+		return false
+	}
+
+	// Make sure this is end of meaningful content on the line
+	// (i.e. next non-whitespace is newline or EOF)
+	s.Next() // consume id
+
+	// Peek to see if there's more on the line (like a dot call)
+	next := s.Peek()
+	if next.Kind == parser.TokenDot || next.Kind == parser.TokenLParen || next.Kind == parser.TokenOperator {
+		s.Restore(saved)
+		return false
+	}
+
+	if _, exists := p.pMap[id]; !exists {
+		pt := &Participant{
+			TypeName: typeName,
+			ID:       id,
+			Index:    len(p.d.Participants),
+		}
+		p.d.Participants = append(p.d.Participants, pt)
+		p.pMap[id] = pt
+	}
+	return true
+}
+
+// tryParseStandaloneParticipant attempts: a single ident (not reserved)
+func (p *zenParser) tryParseStandaloneParticipant(s *parser.Scanner) bool {
+	saved := s.Save()
+
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent {
+		return false
+	}
+	id := s.Next().Text
+
+	if isReservedWord(id) {
+		s.Restore(saved)
+		return false
+	}
+
+	// Make sure it's the only thing on the line
+	next := s.Peek()
+	if next.Kind != parser.TokenNewline && next.Kind != parser.TokenEOF && next.Kind != parser.TokenWhitespace {
+		s.Restore(saved)
+		return false
+	}
+	// If whitespace, check what follows
+	if next.Kind == parser.TokenWhitespace {
+		s.SkipWhitespace()
+		after := s.Peek()
+		if after.Kind != parser.TokenNewline && after.Kind != parser.TokenEOF {
+			s.Restore(saved)
+			return false
+		}
+	}
+
+	if _, exists := p.pMap[id]; !exists {
+		pt := &Participant{
+			TypeName: id,
+			ID:       id,
+			Index:    len(p.d.Participants),
+		}
+		p.d.Participants = append(p.d.Participants, pt)
+		p.pMap[id] = pt
+	}
+	return true
+}
+
+// collectUntilRParen collects text between parens (after '(' is already consumed).
+func (p *zenParser) collectUntilRParen(s *parser.Scanner) string {
+	var parts []string
+	for !s.AtEnd() {
+		tok := s.Peek()
+		if tok.Kind == parser.TokenRParen {
+			s.Next()
+			break
+		}
+		if tok.Kind == parser.TokenNewline {
+			break
+		}
+		s.Next()
+		parts = append(parts, tok.Text)
+	}
+	return strings.TrimSpace(strings.Join(parts, ""))
+}
+
+// skipUntilRParen skips tokens until ')' (after '(' is already consumed).
+func (p *zenParser) skipUntilRParen(s *parser.Scanner) {
+	for !s.AtEnd() {
+		tok := s.Peek()
+		if tok.Kind == parser.TokenRParen {
+			s.Next()
+			return
+		}
+		if tok.Kind == parser.TokenNewline {
+			return
+		}
+		s.Next()
+	}
+}
+
+// collectLabelUntilBrace collects text until '{' or newline/EOF.
+func (p *zenParser) collectLabelUntilBrace(s *parser.Scanner) string {
+	var parts []string
+	for !s.AtEnd() {
+		tok := s.Peek()
+		if tok.Kind == parser.TokenLBrace || tok.Kind == parser.TokenNewline || tok.Kind == parser.TokenEOF {
+			break
+		}
+		s.Next()
+		parts = append(parts, tok.Text)
+	}
+	return strings.TrimSpace(strings.Join(parts, ""))
 }
 
 // inferCaller returns the first declared participant as the default caller,
@@ -434,22 +655,21 @@ func inferCaller(d *ZenUMLDiagram, _ *Participant) *Participant {
 	if len(d.Participants) == 0 {
 		return nil
 	}
-	// Use first participant as default caller
 	return d.Participants[0]
 }
 
-func getOrCreateParticipant(id string, d *ZenUMLDiagram, pMap map[string]*Participant) *Participant {
-	if p, exists := pMap[id]; exists {
-		return p
+func (p *zenParser) getOrCreateParticipant(id string) *Participant {
+	if pt, exists := p.pMap[id]; exists {
+		return pt
 	}
-	p := &Participant{
+	pt := &Participant{
 		TypeName: id,
 		ID:       id,
-		Index:    len(d.Participants),
+		Index:    len(p.d.Participants),
 	}
-	d.Participants = append(d.Participants, p)
-	pMap[id] = p
-	return p
+	p.d.Participants = append(p.d.Participants, pt)
+	p.pMap[id] = pt
+	return pt
 }
 
 func isReservedWord(s string) bool {
