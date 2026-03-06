@@ -12,6 +12,11 @@ const (
 	chartWidth  = 50
 )
 
+var (
+	unicodeBarChars = []string{"█", "▓", "▒", "░"}
+	asciiBarChars   = []string{"#", "%", "@", "+"}
+)
+
 // Render renders an XYChart as a formatted bar/line chart string using Unicode or ASCII characters.
 func Render(chart *XYChart, config *diagram.Config) (string, error) {
 	if chart == nil {
@@ -26,13 +31,13 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 	hChar := "─"
 	vChar := "│"
 	cornerBL := "└"
-	barChar := "█"
+	barChars := unicodeBarChars
 	linePoint := "●"
 	if useAscii {
 		hChar = "-"
 		vChar = "|"
 		cornerBL = "+"
-		barChar = "#"
+		barChars = asciiBarChars
 		linePoint = "*"
 	}
 
@@ -41,14 +46,23 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 		yRange = 1
 	}
 
-	// Determine data count
-	dataCount := len(chart.BarData)
-	if len(chart.LineData) > dataCount {
-		dataCount = len(chart.LineData)
+	// Determine data count (max length across all series).
+	dataCount := 0
+	for _, s := range chart.BarSeries {
+		if len(s.Data) > dataCount {
+			dataCount = len(s.Data)
+		}
+	}
+	for _, s := range chart.LineSeries {
+		if len(s.Data) > dataCount {
+			dataCount = len(s.Data)
+		}
 	}
 	if dataCount == 0 {
 		return "", fmt.Errorf("no data points")
 	}
+
+	numBarSeries := len(chart.BarSeries)
 
 	// Y-axis label width
 	yLabelWidth := len(fmt.Sprintf("%.0f", chart.YMax))
@@ -56,10 +70,17 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 		yLabelWidth = 4
 	}
 
-	// Calculate bar width
-	barWidth := chartWidth / dataCount
-	if barWidth < 1 {
-		barWidth = 1
+	// Calculate slot width (per x-axis position) and sub-bar width.
+	slotWidth := chartWidth / dataCount
+	if slotWidth < 1 {
+		slotWidth = 1
+	}
+	subBarWidth := slotWidth
+	if numBarSeries > 1 {
+		subBarWidth = slotWidth / numBarSeries
+		if subBarWidth < 1 {
+			subBarWidth = 1
+		}
 	}
 
 	var lines []string
@@ -83,32 +104,26 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 		line := yLabel + " " + vChar
 
 		for i := 0; i < dataCount; i++ {
-			// Bar data
-			if i < len(chart.BarData) {
-				barHeight := int(float64(chartHeight) * (chart.BarData[i] - chart.YMin) / yRange)
-				if row < barHeight {
-					line += strings.Repeat(barChar, barWidth)
-				} else {
-					// Check for line data point at this position
-					if i < len(chart.LineData) {
-						lineHeight := int(float64(chartHeight) * (chart.LineData[i] - chart.YMin) / yRange)
+			if numBarSeries > 0 {
+				// Render grouped bars for this position.
+				slotStr := renderBarSlot(chart.BarSeries, i, row, subBarWidth, slotWidth, yRange, chart.YMin, barChars)
+				line += slotStr
+			} else {
+				// Line-only chart: check for line data points.
+				drawn := false
+				for _, ls := range chart.LineSeries {
+					if i < len(ls.Data) {
+						lineHeight := int(float64(chartHeight) * (ls.Data[i] - chart.YMin) / yRange)
 						if row == lineHeight {
-							pad := barWidth / 2
-							line += strings.Repeat(" ", pad) + linePoint + strings.Repeat(" ", barWidth-pad-1)
-						} else {
-							line += strings.Repeat(" ", barWidth)
+							pad := slotWidth / 2
+							line += strings.Repeat(" ", pad) + linePoint + strings.Repeat(" ", slotWidth-pad-1)
+							drawn = true
+							break
 						}
-					} else {
-						line += strings.Repeat(" ", barWidth)
 					}
 				}
-			} else if i < len(chart.LineData) {
-				lineHeight := int(float64(chartHeight) * (chart.LineData[i] - chart.YMin) / yRange)
-				if row == lineHeight {
-					pad := barWidth / 2
-					line += strings.Repeat(" ", pad) + linePoint + strings.Repeat(" ", barWidth-pad-1)
-				} else {
-					line += strings.Repeat(" ", barWidth)
+				if !drawn {
+					line += strings.Repeat(" ", slotWidth)
 				}
 			}
 		}
@@ -117,20 +132,20 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 	}
 
 	// X-axis
-	xAxisLine := strings.Repeat(" ", yLabelWidth+1) + cornerBL + strings.Repeat(hChar, dataCount*barWidth)
+	xAxisLine := strings.Repeat(" ", yLabelWidth+1) + cornerBL + strings.Repeat(hChar, dataCount*slotWidth)
 	lines = append(lines, xAxisLine)
 
 	// X-axis labels
 	var legend []string
 	if len(chart.XValues) > 0 {
 		var labelLines []string
-		labelLines, legend = renderXLabels(chart.XValues, dataCount, barWidth, yLabelWidth)
+		labelLines, legend = renderXLabels(chart.XValues, dataCount, slotWidth, yLabelWidth)
 		lines = append(lines, labelLines...)
 	}
 
 	// Axis labels
 	if chart.XLabel != "" {
-		pad := (yLabelWidth + 2 + dataCount*barWidth - len(chart.XLabel)) / 2
+		pad := (yLabelWidth + 2 + dataCount*slotWidth - len(chart.XLabel)) / 2
 		if pad < 0 {
 			pad = 0
 		}
@@ -138,12 +153,83 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 		lines = append(lines, strings.Repeat(" ", pad)+chart.XLabel)
 	}
 
+	// Build series legend for named series.
+	seriesLegend := buildSeriesLegend(chart.BarSeries, chart.LineSeries, barChars, linePoint)
+	legend = append(legend, seriesLegend...)
+
 	// Merge legend to the right of chart body if present
 	if len(legend) > 0 {
-		lines = mergeLegendRight(lines, legend, yLabelWidth+2+dataCount*barWidth)
+		lines = mergeLegendRight(lines, legend, yLabelWidth+2+dataCount*slotWidth)
 	}
 
 	return strings.Join(lines, "\n") + "\n", nil
+}
+
+// renderBarSlot renders the bars for a single x-axis position across all bar series.
+func renderBarSlot(series []DataSeries, pos, row, subBarWidth, slotWidth int, yRange, yMin float64, barChars []string) string {
+	numSeries := len(series)
+	var slot strings.Builder
+
+	usedWidth := 0
+	for si, s := range series {
+		val := 0.0
+		if pos < len(s.Data) {
+			val = s.Data[pos]
+		}
+		barHeight := int(float64(chartHeight) * (val - yMin) / yRange)
+		fillChar := barChars[si%len(barChars)]
+
+		w := subBarWidth
+		if si == numSeries-1 {
+			// Last series gets any remaining width to fill the slot.
+			w = slotWidth - usedWidth
+		}
+		if row < barHeight {
+			slot.WriteString(strings.Repeat(fillChar, w))
+		} else {
+			slot.WriteString(strings.Repeat(" ", w))
+		}
+		usedWidth += w
+	}
+
+	return slot.String()
+}
+
+// buildSeriesLegend creates legend entries for named bar/line series.
+func buildSeriesLegend(barSeries []DataSeries, lineSeries []DataSeries, barChars []string, linePoint string) []string {
+	var legend []string
+	hasNames := false
+	for _, s := range barSeries {
+		if s.Name != "" {
+			hasNames = true
+			break
+		}
+	}
+	if !hasNames {
+		for _, s := range lineSeries {
+			if s.Name != "" {
+				hasNames = true
+				break
+			}
+		}
+	}
+	if !hasNames {
+		return nil
+	}
+	for i, s := range barSeries {
+		if s.Name == "" {
+			continue
+		}
+		fill := barChars[i%len(barChars)]
+		legend = append(legend, fill+fill+" "+s.Name)
+	}
+	for _, s := range lineSeries {
+		if s.Name == "" {
+			continue
+		}
+		legend = append(legend, linePoint+"  "+s.Name)
+	}
+	return legend
 }
 
 // renderXLabels renders x-axis labels and optionally returns legend entries.

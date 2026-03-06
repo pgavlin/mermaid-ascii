@@ -20,19 +20,27 @@ var (
 	yAxisLabelRegex     = regexp.MustCompile(`^\s*y-axis\s+"([^"]+)"(?:\s+(\d+(?:\.\d+)?)\s*-->\s*(\d+(?:\.\d+)?))?$`)
 	yAxisNoLabelRegex   = regexp.MustCompile(`^\s*y-axis\s+(\d+(?:\.\d+)?)\s*-->\s*(\d+(?:\.\d+)?)$`)
 	barRegex            = regexp.MustCompile(`^\s*bar\s+\[(.+)\]$`)
+	barNamedRegex       = regexp.MustCompile(`^\s*bar\s+"([^"]+)"\s+\[(.+)\]$`)
 	lineRegex           = regexp.MustCompile(`^\s*line\s+\[(.+)\]$`)
+	lineNamedRegex      = regexp.MustCompile(`^\s*line\s+"([^"]+)"\s+\[(.+)\]$`)
 )
+
+// DataSeries represents a named data series in a chart.
+type DataSeries struct {
+	Name string
+	Data []float64
+}
 
 // XYChart represents a parsed XY chart with optional bar and line data series.
 type XYChart struct {
-	Title    string
-	XLabel   string
-	XValues  []string
-	YLabel   string
-	YMin     float64
-	YMax     float64
-	BarData  []float64
-	LineData []float64
+	Title      string
+	XLabel     string
+	XValues    []string
+	YLabel     string
+	YMin       float64
+	YMax       float64
+	BarSeries  []DataSeries
+	LineSeries []DataSeries
 }
 
 // IsXYChart reports whether the input text is an XY chart diagram.
@@ -67,9 +75,7 @@ func Parse(input string) (*XYChart, error) {
 	lines = lines[1:]
 
 	chart := &XYChart{
-		XValues:  []string{},
-		BarData:  []float64{},
-		LineData: []float64{},
+		XValues: []string{},
 	}
 
 	for _, line := range lines {
@@ -111,31 +117,55 @@ func Parse(input string) (*XYChart, error) {
 			continue
 		}
 
+		if match := barNamedRegex.FindStringSubmatch(trimmed); match != nil {
+			chart.BarSeries = append(chart.BarSeries, DataSeries{
+				Name: match[1],
+				Data: parseFloatList(match[2]),
+			})
+			continue
+		}
+
 		if match := barRegex.FindStringSubmatch(trimmed); match != nil {
-			chart.BarData = parseFloatList(match[1])
+			chart.BarSeries = append(chart.BarSeries, DataSeries{
+				Data: parseFloatList(match[1]),
+			})
+			continue
+		}
+
+		if match := lineNamedRegex.FindStringSubmatch(trimmed); match != nil {
+			chart.LineSeries = append(chart.LineSeries, DataSeries{
+				Name: match[1],
+				Data: parseFloatList(match[2]),
+			})
 			continue
 		}
 
 		if match := lineRegex.FindStringSubmatch(trimmed); match != nil {
-			chart.LineData = parseFloatList(match[1])
+			chart.LineSeries = append(chart.LineSeries, DataSeries{
+				Data: parseFloatList(match[1]),
+			})
 			continue
 		}
 	}
 
-	if len(chart.BarData) == 0 && len(chart.LineData) == 0 {
+	if len(chart.BarSeries) == 0 && len(chart.LineSeries) == 0 {
 		return nil, fmt.Errorf("no data found")
 	}
 
 	// Auto-calculate Y range if not specified
 	if chart.YMax == 0 {
-		for _, v := range chart.BarData {
-			if v > chart.YMax {
-				chart.YMax = v
+		for _, s := range chart.BarSeries {
+			for _, v := range s.Data {
+				if v > chart.YMax {
+					chart.YMax = v
+				}
 			}
 		}
-		for _, v := range chart.LineData {
-			if v > chart.YMax {
-				chart.YMax = v
+		for _, s := range chart.LineSeries {
+			for _, v := range s.Data {
+				if v > chart.YMax {
+					chart.YMax = v
+				}
 			}
 		}
 	}

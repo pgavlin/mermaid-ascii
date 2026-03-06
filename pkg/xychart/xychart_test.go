@@ -50,12 +50,61 @@ func TestParse(t *testing.T) {
 		t.Errorf("XValues count = %d, want 4", len(chart.XValues))
 	}
 
-	if len(chart.BarData) != 4 {
-		t.Errorf("BarData count = %d, want 4", len(chart.BarData))
+	if len(chart.BarSeries) != 1 {
+		t.Fatalf("BarSeries count = %d, want 1", len(chart.BarSeries))
+	}
+	if len(chart.BarSeries[0].Data) != 4 {
+		t.Errorf("BarSeries[0].Data count = %d, want 4", len(chart.BarSeries[0].Data))
+	}
+	if chart.BarSeries[0].Data[0] != 5000 {
+		t.Errorf("BarSeries[0].Data[0] = %f, want 5000", chart.BarSeries[0].Data[0])
+	}
+}
+
+func TestParseNamedSeries(t *testing.T) {
+	input := `xychart-beta
+    title "Drift Runs"
+    x-axis ["Mar 25", "Apr 25", "May 25"]
+    y-axis "Runs" 0 --> 5500
+    bar "Succeeded" [1533, 1577, 1745]
+    bar "Failed" [519, 911, 1670]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
 	}
 
-	if chart.BarData[0] != 5000 {
-		t.Errorf("BarData[0] = %f, want 5000", chart.BarData[0])
+	if len(chart.BarSeries) != 2 {
+		t.Fatalf("BarSeries count = %d, want 2", len(chart.BarSeries))
+	}
+	if chart.BarSeries[0].Name != "Succeeded" {
+		t.Errorf("BarSeries[0].Name = %q, want %q", chart.BarSeries[0].Name, "Succeeded")
+	}
+	if chart.BarSeries[1].Name != "Failed" {
+		t.Errorf("BarSeries[1].Name = %q, want %q", chart.BarSeries[1].Name, "Failed")
+	}
+	if len(chart.BarSeries[0].Data) != 3 {
+		t.Errorf("BarSeries[0].Data count = %d, want 3", len(chart.BarSeries[0].Data))
+	}
+	if chart.BarSeries[0].Data[0] != 1533 {
+		t.Errorf("BarSeries[0].Data[0] = %f, want 1533", chart.BarSeries[0].Data[0])
+	}
+}
+
+func TestParseNamedLine(t *testing.T) {
+	input := `xychart-beta
+    line "Trend" [10, 20, 30]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(chart.LineSeries) != 1 {
+		t.Fatalf("LineSeries count = %d, want 1", len(chart.LineSeries))
+	}
+	if chart.LineSeries[0].Name != "Trend" {
+		t.Errorf("LineSeries[0].Name = %q, want %q", chart.LineSeries[0].Name, "Trend")
 	}
 }
 
@@ -146,11 +195,9 @@ func TestRenderBarChart(t *testing.T) {
 	if !strings.Contains(output, "Month") {
 		t.Error("expected x-axis label 'Month' in output")
 	}
-	// Should have the y-axis vertical line
 	if !strings.Contains(output, "│") {
 		t.Error("expected y-axis vertical line character")
 	}
-	// Should have x-axis bottom border
 	if !strings.Contains(output, "└") {
 		t.Error("expected bottom-left corner character")
 	}
@@ -267,8 +314,6 @@ func TestRenderBarAndLineChart(t *testing.T) {
 	if !strings.Contains(output, "█") {
 		t.Error("expected bar character in combined chart")
 	}
-	// Line points may or may not be visible depending on where bars are
-	// Just verify it renders without error
 	if output == "" {
 		t.Error("expected non-empty output")
 	}
@@ -290,7 +335,6 @@ func TestRenderStaggeredLabels(t *testing.T) {
 		t.Fatalf("Render failed: %v", err)
 	}
 
-	// Staggered layout should have full labels across two rows
 	if !strings.Contains(output, "January") {
 		t.Error("expected full label 'January' in staggered output")
 	}
@@ -370,10 +414,7 @@ func TestRenderMultiColumnLegend(t *testing.T) {
 }
 
 func TestRenderNoDataPoints(t *testing.T) {
-	chart := &XYChart{
-		BarData:  []float64{},
-		LineData: []float64{},
-	}
+	chart := &XYChart{}
 	_, err := Render(chart, diagram.DefaultConfig())
 	if err == nil {
 		t.Error("expected error for chart with no data points")
@@ -492,11 +533,77 @@ func TestRenderNoTitle(t *testing.T) {
 		t.Fatalf("Render failed: %v", err)
 	}
 
-	// Should still produce valid output without a title
 	if output == "" {
 		t.Error("expected non-empty output without title")
 	}
 	if !strings.Contains(output, "│") {
 		t.Error("expected y-axis in output")
+	}
+}
+
+func TestRenderMultipleBarSeries(t *testing.T) {
+	input := `xychart-beta
+    title "Drift Runs: Execution Succeeded vs. Failed"
+    x-axis ["Mar 25", "Apr 25", "May 25"]
+    y-axis "Runs" 0 --> 5500
+    bar "Succeeded" [1533, 1577, 1745]
+    bar "Failed" [519, 911, 1670]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	config := diagram.DefaultConfig()
+	output, err := Render(chart, config)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	// Should contain both bar characters for the two series.
+	if !strings.Contains(output, "█") {
+		t.Error("expected first bar character █")
+	}
+	if !strings.Contains(output, "▓") {
+		t.Error("expected second bar character ▓")
+	}
+	// Should contain series legend.
+	if !strings.Contains(output, "██ Succeeded") {
+		t.Errorf("expected series legend for Succeeded in output:\n%s", output)
+	}
+	if !strings.Contains(output, "▓▓ Failed") {
+		t.Errorf("expected series legend for Failed in output:\n%s", output)
+	}
+}
+
+func TestRenderMultipleBarSeriesFull(t *testing.T) {
+	input := `xychart-beta
+    title "Drift Runs: Execution Succeeded vs. Failed"
+    x-axis ["Mar 25", "Apr 25", "May 25", "Jun 25", "Jul 25", "Aug 25", "Sep 25", "Oct 25", "Nov 25", "Dec 25", "Jan 26", "Feb 26"]
+    y-axis "Runs" 0 --> 5500
+    bar "Succeeded" [1533, 1577, 1745, 1655, 1945, 2016, 1887, 3008, 4885, 4218, 3609, 3217]
+    bar "Failed" [519, 911, 1670, 1708, 1811, 1312, 1286, 929, 1040, 1519, 1673, 1822]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	config := diagram.DefaultConfig()
+	output, err := Render(chart, config)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	t.Logf("Rendered output:\n%s", output)
+
+	if !strings.Contains(output, "Drift Runs") {
+		t.Error("expected title in output")
+	}
+	if !strings.Contains(output, "█") {
+		t.Error("expected first series bar character")
+	}
+	if !strings.Contains(output, "▓") {
+		t.Error("expected second series bar character")
 	}
 }
