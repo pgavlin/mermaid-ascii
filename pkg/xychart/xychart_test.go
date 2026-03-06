@@ -274,6 +274,63 @@ func TestRenderBarAndLineChart(t *testing.T) {
 	}
 }
 
+func TestRenderStaggeredLabels(t *testing.T) {
+	input := `xychart-beta
+    x-axis "Month" ["January", "February", "March", "April", "May", "June", "July", "August"]
+    y-axis "Y" 0 --> 100
+    bar [30, 50, 70, 40, 60, 80, 55, 65]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	output, err := Render(chart, diagram.DefaultConfig())
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	// Staggered layout should have full labels across two rows
+	if !strings.Contains(output, "January") {
+		t.Error("expected full label 'January' in staggered output")
+	}
+	if !strings.Contains(output, "February") {
+		t.Error("expected full label 'February' in staggered output")
+	}
+}
+
+func TestRenderVerticalLabels(t *testing.T) {
+	input := `xychart-beta
+    x-axis "Month" ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    y-axis "Y" 0 --> 100
+    bar [30, 50, 70, 40, 60, 80, 55, 65, 75, 45, 85, 95]`
+
+	chart, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	output, err := Render(chart, diagram.DefaultConfig())
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	// Vertical labels write one char per row; first row should have initials
+	lines := strings.Split(output, "\n")
+	// Find the line after the x-axis border
+	foundVertical := false
+	for _, line := range lines {
+		// First vertical label row: should contain the first letters spaced out
+		if strings.Contains(line, "J") && strings.Contains(line, "F") && strings.Contains(line, "M") && strings.Contains(line, "S") && strings.Contains(line, "O") && strings.Contains(line, "N") && strings.Contains(line, "D") {
+			foundVertical = true
+			break
+		}
+	}
+	if !foundVertical {
+		t.Error("expected vertical label initials row in output")
+	}
+}
+
 func TestRenderNoDataPoints(t *testing.T) {
 	chart := &XYChart{
 		BarData:  []float64{},

@@ -122,22 +122,7 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 
 	// X-axis labels
 	if len(chart.XValues) > 0 {
-		labelLine := strings.Repeat(" ", yLabelWidth+2)
-		for i, label := range chart.XValues {
-			if i >= dataCount {
-				break
-			}
-			if len(label) > barWidth {
-				label = label[:barWidth]
-			}
-			pad := (barWidth - len(label)) / 2
-			labelLine += strings.Repeat(" ", pad) + label
-			remaining := barWidth - pad - len(label)
-			if remaining > 0 {
-				labelLine += strings.Repeat(" ", remaining)
-			}
-		}
-		lines = append(lines, strings.TrimRight(labelLine, " "))
+		lines = append(lines, renderXLabels(chart.XValues, dataCount, barWidth, yLabelWidth)...)
 	}
 
 	// Axis labels
@@ -151,4 +136,138 @@ func Render(chart *XYChart, config *diagram.Config) (string, error) {
 	}
 
 	return strings.Join(lines, "\n") + "\n", nil
+}
+
+// renderXLabels renders x-axis labels using one of three strategies:
+//  1. Single row — if every label fits within its bar width
+//  2. Staggered two rows — if labels fit within 2x bar width
+//  3. Vertical — labels written top-to-bottom, one character per row
+func renderXLabels(labels []string, dataCount, barWidth, yLabelWidth int) []string {
+	// Determine the max label length (capped for display)
+	maxLabel := 0
+	for i, l := range labels {
+		if i >= dataCount {
+			break
+		}
+		if len(l) > maxLabel {
+			maxLabel = len(l)
+		}
+	}
+
+	prefix := strings.Repeat(" ", yLabelWidth+2)
+
+	if maxLabel <= barWidth {
+		// Strategy 1: single horizontal row
+		return []string{strings.TrimRight(singleRowLabels(labels, dataCount, barWidth, prefix), " ")}
+	}
+
+	if maxLabel <= barWidth*2 {
+		// Strategy 2: staggered two rows
+		return staggeredLabels(labels, dataCount, barWidth, prefix)
+	}
+
+	// Strategy 3: vertical labels
+	return verticalLabels(labels, dataCount, barWidth, prefix)
+}
+
+func singleRowLabels(labels []string, dataCount, barWidth int, prefix string) string {
+	line := prefix
+	for i, label := range labels {
+		if i >= dataCount {
+			break
+		}
+		if len(label) > barWidth {
+			label = label[:barWidth]
+		}
+		pad := (barWidth - len(label)) / 2
+		line += strings.Repeat(" ", pad) + label
+		remaining := barWidth - pad - len(label)
+		if remaining > 0 {
+			line += strings.Repeat(" ", remaining)
+		}
+	}
+	return line
+}
+
+func staggeredLabels(labels []string, dataCount, barWidth int, prefix string) []string {
+	// Even-indexed labels on row 1, odd-indexed on row 2
+	row1 := prefix
+	row2 := prefix
+	for i := 0; i < dataCount; i++ {
+		label := ""
+		if i < len(labels) {
+			label = labels[i]
+		}
+		if len(label) > barWidth*2 {
+			label = label[:barWidth*2-1] + "·"
+		}
+		if i%2 == 0 {
+			// Center label within its 2-bar span starting at this position
+			pad := (barWidth - len(label)) / 2
+			if pad < 0 {
+				pad = 0
+			}
+			row1 += strings.Repeat(" ", pad) + label
+			remaining := barWidth - pad - len(label)
+			if remaining > 0 {
+				row1 += strings.Repeat(" ", remaining)
+			}
+			row2 += strings.Repeat(" ", barWidth)
+		} else {
+			pad := (barWidth - len(label)) / 2
+			if pad < 0 {
+				pad = 0
+			}
+			row2 += strings.Repeat(" ", pad) + label
+			remaining := barWidth - pad - len(label)
+			if remaining > 0 {
+				row2 += strings.Repeat(" ", remaining)
+			}
+			row1 += strings.Repeat(" ", barWidth)
+		}
+	}
+	return []string{
+		strings.TrimRight(row1, " "),
+		strings.TrimRight(row2, " "),
+	}
+}
+
+func verticalLabels(labels []string, dataCount, barWidth int, prefix string) []string {
+	const maxLabelLen = 12
+
+	// Truncate labels if needed and find max height
+	display := make([]string, dataCount)
+	maxHeight := 0
+	for i := 0; i < dataCount; i++ {
+		if i < len(labels) {
+			display[i] = labels[i]
+		}
+		if len(display[i]) > maxLabelLen {
+			display[i] = display[i][:maxLabelLen-1] + "·"
+		}
+		if len(display[i]) > maxHeight {
+			maxHeight = len(display[i])
+		}
+	}
+
+	var rows []string
+	for row := 0; row < maxHeight; row++ {
+		line := prefix
+		for i := 0; i < dataCount; i++ {
+			label := display[i]
+			// Place character at center of bar width
+			centerPos := barWidth / 2
+			if row < len(label) {
+				line += strings.Repeat(" ", centerPos) + string(label[row])
+				remaining := barWidth - centerPos - 1
+				if remaining > 0 {
+					line += strings.Repeat(" ", remaining)
+				}
+			} else {
+				line += strings.Repeat(" ", barWidth)
+			}
+		}
+		rows = append(rows, strings.TrimRight(line, " "))
+	}
+	return rows
 }
