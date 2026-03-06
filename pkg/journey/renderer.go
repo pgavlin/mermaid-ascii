@@ -25,19 +25,13 @@ func Render(jd *JourneyDiagram, config *diagram.Config) (string, error) {
 	// Characters
 	hChar := "─"
 	vChar := "│"
-	cornerTL := "┌"
-	cornerTR := "┐"
-	cornerBL := "└"
-	cornerBR := "┘"
+	crossChar := "┼"
 	fillChar := "█"
 	emptyChar := "░"
 	if useAscii {
 		hChar = "-"
 		vChar = "|"
-		cornerTL = "+"
-		cornerTR = "+"
-		cornerBL = "+"
-		cornerBR = "+"
+		crossChar = "+"
 		fillChar = "#"
 		emptyChar = "."
 	}
@@ -72,7 +66,7 @@ func Render(jd *JourneyDiagram, config *diagram.Config) (string, error) {
 	// Header
 	header := padRight("Task", nameWidth) + vChar + " Score " + vChar + " Satisfaction"
 	lines = append(lines, header)
-	sep := strings.Repeat(hChar, nameWidth) + "+" + strings.Repeat(hChar, 7) + "+" + strings.Repeat(hChar, barMaxWidth+2)
+	sep := strings.Repeat(hChar, nameWidth) + crossChar + strings.Repeat(hChar, 7) + crossChar + strings.Repeat(hChar, barMaxWidth+2)
 	lines = append(lines, sep)
 
 	for _, section := range jd.Sections {
@@ -99,11 +93,6 @@ func Render(jd *JourneyDiagram, config *diagram.Config) (string, error) {
 			if len(task.Actors) > 0 {
 				actorStr = " " + strings.Join(task.Actors, ", ")
 			}
-
-			_ = cornerTL
-			_ = cornerTR
-			_ = cornerBL
-			_ = cornerBR
 
 			line := padRight(task.Name, nameWidth) + vChar + fmt.Sprintf("  %d %s ", task.Score, scoreFace) + vChar + " " + bar + actorStr
 			lines = append(lines, line)

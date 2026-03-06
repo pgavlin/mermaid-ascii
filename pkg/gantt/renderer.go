@@ -96,12 +96,20 @@ func Render(gd *GanttDiagram, config *diagram.Config) (string, error) {
 	lines = append(lines, strings.TrimRight(headerLine, " "))
 
 	// Separator
-	sepLine := strings.Repeat(" ", labelWidth+1)
 	hChar := "─"
+	cornerTL := "┌"
+	cornerTR := "┐"
+	cornerBL := "└"
+	cornerBR := "┘"
 	if useAscii {
 		hChar = "-"
+		cornerTL = "+"
+		cornerTR = "+"
+		cornerBL = "+"
+		cornerBR = "+"
 	}
-	sepLine += "+" + strings.Repeat(hChar, chartWidth) + "+"
+	sepLine := strings.Repeat(" ", labelWidth+1)
+	sepLine += cornerTL + strings.Repeat(hChar, chartWidth) + cornerTR
 	lines = append(lines, sepLine)
 
 	// Render tasks, grouped by section
@@ -141,7 +149,7 @@ func Render(gd *GanttDiagram, config *diagram.Config) (string, error) {
 
 	// Bottom separator
 	bottomSep := strings.Repeat(" ", labelWidth+1)
-	bottomSep += "+" + strings.Repeat(hChar, chartWidth) + "+"
+	bottomSep += cornerBL + strings.Repeat(hChar, chartWidth) + cornerBR
 	lines = append(lines, bottomSep)
 
 	return strings.Join(lines, "\n") + "\n", nil
