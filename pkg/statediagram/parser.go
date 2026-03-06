@@ -3,44 +3,22 @@ package statediagram
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
 // StateDiagramKeyword is the Mermaid keyword that identifies a state diagram.
 const StateDiagramKeyword = "stateDiagram-v2"
 
-var (
-	// transitionRegex matches: State1 --> State2 or State1 --> State2 : trigger
-	// Also matches [*] as the start/end pseudo-state
-	transitionRegex = regexp.MustCompile(`^\s*(\[\*\]|[\w]+)\s*-->\s*(\[\*\]|[\w]+)\s*(?::\s*(.+))?\s*$`)
-
-	// stateAliasRegex matches: state "Description" as s1
-	stateAliasRegex = regexp.MustCompile(`^\s*state\s+"([^"]+)"\s+as\s+(\w+)\s*$`)
-
-	// stateBlockRegex matches: state "name" as s1 { or state s1 {
-	stateBlockRegex = regexp.MustCompile(`^\s*state\s+(?:"([^"]+)"\s+as\s+)?(\w+)\s*\{\s*$`)
-
-	// noteRegex matches: note right of State1 : text or note left of State1 : text
-	noteRegex = regexp.MustCompile(`^\s*note\s+(right|left)\s+of\s+(\w+)\s*:\s*(.+)\s*$`)
-
-	// closingBraceRegex matches a closing brace
-	closingBraceRegex = regexp.MustCompile(`^\s*\}\s*$`)
-
-	// stateInlineRegex matches: state StateName
-	stateInlineRegex = regexp.MustCompile(`^\s*state\s+(\w+)\s*$`)
-)
-
 // State represents a state in the diagram.
 type State struct {
-	ID          string
-	Label       string
-	IsStart     bool
-	IsEnd       bool
-	Children    []*State
-	Index       int
+	ID       string
+	Label    string
+	IsStart  bool
+	IsEnd    bool
+	Children []*State
+	Index    int
 }
 
 // Transition represents a transition between states.
@@ -95,17 +73,21 @@ func Parse(input string) (*StateDiagram, error) {
 		return nil, fmt.Errorf("empty input")
 	}
 
-	rawLines := diagram.SplitLines(input)
-	lines := diagram.RemoveComments(rawLines)
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("no content found")
-	}
+	s := parser.NewScanner(input)
+	s.SkipNewlines()
 
-	first := strings.TrimSpace(lines[0])
-	if !strings.HasPrefix(first, StateDiagramKeyword) {
+	// Expect "stateDiagram-v2"
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent {
 		return nil, fmt.Errorf("expected %q keyword", StateDiagramKeyword)
 	}
-	lines = lines[1:]
+	// The keyword is split into tokens: "stateDiagram" then "-" then "v2"
+	// Collect the full keyword text
+	keyword := collectKeyword(s)
+	if keyword != StateDiagramKeyword {
+		return nil, fmt.Errorf("expected %q keyword", StateDiagramKeyword)
+	}
+	s.SkipNewlines()
 
 	sd := &StateDiagram{
 		States:      []*State{},
@@ -114,8 +96,7 @@ func Parse(input string) (*StateDiagram, error) {
 		stateMap:    make(map[string]*State),
 	}
 
-	_, err := sd.parseLines(lines)
-	if err != nil {
+	if err := sd.parseStatements(s, false); err != nil {
 		return nil, err
 	}
 
@@ -126,102 +107,250 @@ func Parse(input string) (*StateDiagram, error) {
 	return sd, nil
 }
 
-func (sd *StateDiagram) parseLines(lines []string) (int, error) {
-	i := 0
-	for i < len(lines) {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			i++
-			continue
+// collectKeyword reads "stateDiagram-v2" which tokenizes as Ident("stateDiagram") Operator("-") Ident("v2").
+func collectKeyword(s *parser.Scanner) string {
+	var b strings.Builder
+	// First token must be ident
+	tok := s.Next()
+	b.WriteString(tok.Text)
+	// Check for "-v2" suffix
+	if s.Peek().Kind == parser.TokenOperator && s.Peek().Text == "-" {
+		b.WriteString(s.Next().Text)
+		if s.Peek().Kind == parser.TokenIdent {
+			b.WriteString(s.Next().Text)
+		}
+	}
+	return b.String()
+}
+
+func (sd *StateDiagram) parseStatements(s *parser.Scanner, inBlock bool) error {
+	for !s.AtEnd() {
+		s.SkipNewlines()
+		if s.AtEnd() {
+			break
 		}
 
-		// Check for closing brace (end of composite state)
-		if closingBraceRegex.MatchString(line) {
-			return i, nil
-		}
+		tok := s.Peek()
 
-		// Check for state block: state "label" as id { or state id {
-		if match := stateBlockRegex.FindStringSubmatch(line); match != nil {
-			label := match[1]
-			id := match[2]
-			if label == "" {
-				label = id
+		// Closing brace ends a composite state block
+		if tok.Kind == parser.TokenRBrace {
+			if inBlock {
+				s.Next() // consume '}'
+				return nil
 			}
-			state := sd.getOrCreateState(id)
-			state.Label = label
-			i++
-			// Parse children
-			consumed, err := sd.parseLines(lines[i:])
-			if err != nil {
-				return 0, err
+			// Unexpected '}' at top level — skip
+			s.Next()
+			continue
+		}
+
+		// Try to parse a statement
+		if tok.Kind == parser.TokenIdent {
+			switch tok.Text {
+			case "state":
+				if err := sd.parseState(s); err != nil {
+					return err
+				}
+				continue
+			case "note":
+				if err := sd.parseNote(s); err != nil {
+					return err
+				}
+				continue
 			}
-			i += consumed
-			// Skip closing brace
-			if i < len(lines) && closingBraceRegex.MatchString(strings.TrimSpace(lines[i])) {
-				i++
+		}
+
+		// Try to parse a transition: stateID --> stateID [: trigger]
+		if tok.Kind == parser.TokenIdent || (tok.Kind == parser.TokenLBracket) {
+			if sd.tryParseTransition(s) {
+				continue
 			}
-			continue
 		}
 
-		// Check for state alias: state "Description" as s1
-		if match := stateAliasRegex.FindStringSubmatch(line); match != nil {
-			label := match[1]
-			id := match[2]
-			state := sd.getOrCreateState(id)
-			state.Label = label
-			i++
-			continue
-		}
-
-		// Check for inline state: state StateName
-		if match := stateInlineRegex.FindStringSubmatch(line); match != nil {
-			sd.getOrCreateState(match[1])
-			i++
-			continue
-		}
-
-		// Check for note
-		if match := noteRegex.FindStringSubmatch(line); match != nil {
-			posStr := match[1]
-			stateID := match[2]
-			text := strings.TrimSpace(match[3])
-
-			state := sd.getOrCreateState(stateID)
-			pos := NoteRight
-			if posStr == "left" {
-				pos = NoteLeft
-			}
-			sd.Notes = append(sd.Notes, &Note{
-				Position: pos,
-				State:    state,
-				Text:     text,
-			})
-			i++
-			continue
-		}
-
-		// Check for transition
-		if match := transitionRegex.FindStringSubmatch(line); match != nil {
-			fromID := match[1]
-			toID := match[2]
-			trigger := strings.TrimSpace(match[3])
-
-			from := sd.getOrCreateState(fromID)
-			to := sd.getOrCreateState(toID)
-			sd.Transitions = append(sd.Transitions, &Transition{
-				From:    from,
-				To:      to,
-				Trigger: trigger,
-			})
-			i++
-			continue
-		}
-
-		// Unknown line, skip
-		i++
+		// Skip unknown tokens to end of line
+		parser.SkipToEndOfLine(s)
 	}
 
-	return i, nil
+	if inBlock {
+		return fmt.Errorf("unexpected end of input, expected '}'")
+	}
+	return nil
+}
+
+// parseState handles: state "Label" as id { ... }, state "Label" as id, state id { ... }, state id
+func (sd *StateDiagram) parseState(s *parser.Scanner) error {
+	s.Next() // consume "state"
+	s.SkipWhitespace()
+
+	var label, id string
+
+	tok := s.Peek()
+	if tok.Kind == parser.TokenString {
+		// state "Label" as id [{ ... }]
+		label = s.Next().Text
+		s.SkipWhitespace()
+		// Expect "as"
+		tok = s.Peek()
+		if tok.Kind == parser.TokenIdent && tok.Text == "as" {
+			s.Next() // consume "as"
+			s.SkipWhitespace()
+			idTok := s.Peek()
+			if idTok.Kind == parser.TokenIdent {
+				id = s.Next().Text
+			} else {
+				return parser.Errorf(idTok.Pos, "expected state identifier after 'as'")
+			}
+		} else {
+			return parser.Errorf(tok.Pos, "expected 'as' after state label")
+		}
+	} else if tok.Kind == parser.TokenIdent {
+		// state id [{ ... }]
+		id = s.Next().Text
+		label = id
+	} else {
+		return parser.Errorf(tok.Pos, "expected state name or label")
+	}
+
+	state := sd.getOrCreateState(id)
+	state.Label = label
+
+	s.SkipWhitespace()
+
+	// Check for opening brace (composite state)
+	if s.Peek().Kind == parser.TokenLBrace {
+		s.Next() // consume '{'
+		s.SkipNewlines()
+		return sd.parseStatements(s, true)
+	}
+
+	return nil
+}
+
+// parseNote handles: note right/left of StateID : text
+func (sd *StateDiagram) parseNote(s *parser.Scanner) error {
+	s.Next() // consume "note"
+	s.SkipWhitespace()
+
+	// Expect "right" or "left"
+	posTok := s.Peek()
+	if posTok.Kind != parser.TokenIdent || (posTok.Text != "right" && posTok.Text != "left") {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	posStr := s.Next().Text
+	s.SkipWhitespace()
+
+	// Expect "of"
+	ofTok := s.Peek()
+	if ofTok.Kind != parser.TokenIdent || ofTok.Text != "of" {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	s.Next() // consume "of"
+	s.SkipWhitespace()
+
+	// Expect state ID
+	stateIDTok := s.Peek()
+	if stateIDTok.Kind != parser.TokenIdent {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	stateID := s.Next().Text
+	s.SkipWhitespace()
+
+	// Expect ":"
+	if s.Peek().Kind != parser.TokenColon {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+	s.Next() // consume ":"
+	s.SkipWhitespace()
+
+	// Rest of line is the note text
+	text := strings.TrimSpace(parser.ConsumeRestOfLine(s))
+
+	state := sd.getOrCreateState(stateID)
+	pos := NoteRight
+	if posStr == "left" {
+		pos = NoteLeft
+	}
+	sd.Notes = append(sd.Notes, &Note{
+		Position: pos,
+		State:    state,
+		Text:     text,
+	})
+	return nil
+}
+
+// tryParseTransition attempts to parse: stateID --> stateID [: trigger]
+// Returns true if successful.
+func (sd *StateDiagram) tryParseTransition(s *parser.Scanner) bool {
+	saved := s.Save()
+
+	fromID := sd.parseStateID(s)
+	if fromID == "" {
+		s.Restore(saved)
+		return false
+	}
+	s.SkipWhitespace()
+
+	// Expect "-->"
+	tok := s.Peek()
+	if tok.Kind != parser.TokenOperator || tok.Text != "-->" {
+		s.Restore(saved)
+		return false
+	}
+	s.Next() // consume "-->"
+	s.SkipWhitespace()
+
+	toID := sd.parseStateID(s)
+	if toID == "" {
+		s.Restore(saved)
+		return false
+	}
+	s.SkipWhitespace()
+
+	// Optional ": trigger"
+	var trigger string
+	if s.Peek().Kind == parser.TokenColon {
+		s.Next() // consume ":"
+		s.SkipWhitespace()
+		trigger = strings.TrimSpace(parser.ConsumeRestOfLine(s))
+	}
+
+	from := sd.getOrCreateState(fromID)
+	to := sd.getOrCreateState(toID)
+	sd.Transitions = append(sd.Transitions, &Transition{
+		From:    from,
+		To:      to,
+		Trigger: trigger,
+	})
+	return true
+}
+
+// parseStateID parses a state identifier: either a bare ident or "[*]".
+func (sd *StateDiagram) parseStateID(s *parser.Scanner) string {
+	tok := s.Peek()
+	if tok.Kind == parser.TokenIdent {
+		return s.Next().Text
+	}
+	// Check for [*]
+	if tok.Kind == parser.TokenLBracket {
+		saved := s.Save()
+		s.Next() // consume '['
+		next := s.Peek()
+		if next.Kind == parser.TokenOperator || next.Kind == parser.TokenText {
+			// Could be '*' which tokenizes as Text
+			if strings.Contains(next.Text, "*") {
+				s.Next() // consume '*'
+				if s.Peek().Kind == parser.TokenRBracket {
+					s.Next() // consume ']'
+					return "[*]"
+				}
+			}
+		}
+		s.Restore(saved)
+	}
+	return ""
 }
 
 func (sd *StateDiagram) getOrCreateState(id string) *State {
