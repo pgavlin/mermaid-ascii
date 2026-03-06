@@ -166,8 +166,16 @@ func renderXLabels(labels []string, dataCount, barWidth, yLabelWidth int) []stri
 		return staggeredLabels(labels, dataCount, barWidth, prefix)
 	}
 
-	// Strategy 3: vertical labels
+	// Strategy 3: short vertical or legend with keys
 	return verticalLabels(labels, dataCount, barWidth, prefix)
+}
+
+// labelKey returns a short key for index i: a-z, then aa, ab, ...
+func labelKey(i int) string {
+	if i < 26 {
+		return string(rune('a' + i))
+	}
+	return string(rune('a'+i/26-1)) + string(rune('a'+i%26))
 }
 
 func singleRowLabels(labels []string, dataCount, barWidth int, prefix string) string {
@@ -232,18 +240,54 @@ func staggeredLabels(labels []string, dataCount, barWidth int, prefix string) []
 	}
 }
 
-func verticalLabels(labels []string, dataCount, barWidth int, prefix string) []string {
-	const maxLabelLen = 12
+const verticalLabelMaxRows = 5
 
-	// Truncate labels if needed and find max height
+func verticalLabels(labels []string, dataCount, barWidth int, prefix string) []string {
+	// Determine the max label length
+	maxLen := 0
+	for i, l := range labels {
+		if i >= dataCount {
+			break
+		}
+		if len(l) > maxLen {
+			maxLen = len(l)
+		}
+	}
+
+	if maxLen <= verticalLabelMaxRows {
+		// Short enough to render vertically without a legend
+		return verticalLabelRows(labels, dataCount, barWidth, prefix)
+	}
+
+	// Use short keys on the axis with a legend below
+	keys := make([]string, dataCount)
+	for i := 0; i < dataCount; i++ {
+		keys[i] = labelKey(i)
+	}
+
+	// Render the short keys as a single horizontal row (they always fit)
+	rows := []string{strings.TrimRight(singleRowLabels(keys, dataCount, barWidth, prefix), " ")}
+
+	// Append legend
+	rows = append(rows, "")
+	for i := 0; i < dataCount; i++ {
+		label := ""
+		if i < len(labels) {
+			label = labels[i]
+		}
+		if label != "" {
+			rows = append(rows, fmt.Sprintf("%s%s: %s", prefix, keys[i], label))
+		}
+	}
+	return rows
+}
+
+func verticalLabelRows(labels []string, dataCount, barWidth int, prefix string) []string {
 	display := make([]string, dataCount)
 	maxHeight := 0
 	for i := 0; i < dataCount; i++ {
 		if i < len(labels) {
 			display[i] = labels[i]
-		}
-		if len(display[i]) > maxLabelLen {
-			display[i] = display[i][:maxLabelLen-1] + "·"
 		}
 		if len(display[i]) > maxHeight {
 			maxHeight = len(display[i])
@@ -255,7 +299,6 @@ func verticalLabels(labels []string, dataCount, barWidth int, prefix string) []s
 		line := prefix
 		for i := 0; i < dataCount; i++ {
 			label := display[i]
-			// Place character at center of bar width
 			centerPos := barWidth / 2
 			if row < len(label) {
 				line += strings.Repeat(" ", centerPos) + string(label[row])

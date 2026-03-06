@@ -299,7 +299,7 @@ func TestRenderStaggeredLabels(t *testing.T) {
 	}
 }
 
-func TestRenderVerticalLabels(t *testing.T) {
+func TestRenderLegendLabels(t *testing.T) {
 	input := `xychart-beta
     x-axis "Month" ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     y-axis "Y" 0 --> 100
@@ -315,19 +315,12 @@ func TestRenderVerticalLabels(t *testing.T) {
 		t.Fatalf("Render failed: %v", err)
 	}
 
-	// Vertical labels write one char per row; first row should have initials
-	lines := strings.Split(output, "\n")
-	// Find the line after the x-axis border
-	foundVertical := false
-	for _, line := range lines {
-		// First vertical label row: should contain the first letters spaced out
-		if strings.Contains(line, "J") && strings.Contains(line, "F") && strings.Contains(line, "M") && strings.Contains(line, "S") && strings.Contains(line, "O") && strings.Contains(line, "N") && strings.Contains(line, "D") {
-			foundVertical = true
-			break
-		}
+	// Long labels should use legend with short keys
+	if !strings.Contains(output, "a: January") {
+		t.Error("expected legend entry 'a: January' in output")
 	}
-	if !foundVertical {
-		t.Error("expected vertical label initials row in output")
+	if !strings.Contains(output, "l: December") {
+		t.Error("expected legend entry 'l: December' in output")
 	}
 }
 
