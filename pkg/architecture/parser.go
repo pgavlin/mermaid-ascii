@@ -4,31 +4,13 @@ package architecture
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
 // ArchitectureBetaKeyword is the Mermaid keyword that identifies an architecture diagram.
 const ArchitectureBetaKeyword = "architecture-beta"
-
-var (
-	// service name(icon)[label]
-	serviceRegex = regexp.MustCompile(`^\s*service\s+(\w+)(?:\(([^)]*)\))?(?:\[([^\]]*)\])?\s*$`)
-
-	// group name(icon)[label] {
-	groupStartRegex = regexp.MustCompile(`^\s*group\s+(\w+)(?:\(([^)]*)\))?(?:\[([^\]]*)\])?\s*\{\s*$`)
-
-	// junction name
-	junctionRegex = regexp.MustCompile(`^\s*junction\s+(\w+)\s*$`)
-
-	// service1:edge_pos -- service2:edge_pos  or service1:edge_pos --> service2:edge_pos
-	connectionRegex = regexp.MustCompile(`^\s*(\w+)(?::(\w+))?\s*(-->|--)\s*(\w+)(?::(\w+))?\s*$`)
-
-	// end of group
-	groupEndRegex = regexp.MustCompile(`^\s*\}\s*$`)
-)
 
 // Service represents a service/node in the architecture diagram.
 type Service struct {
@@ -48,11 +30,11 @@ type Group struct {
 
 // Connection represents a connection between two services.
 type Connection struct {
-	From      string
-	FromEdge  string
-	To        string
-	ToEdge    string
-	Directed  bool // true for -->, false for --
+	From     string
+	FromEdge string
+	To       string
+	ToEdge   string
+	Directed bool // true for -->, false for --
 }
 
 // ArchitectureDiagram represents a parsed architecture diagram.
@@ -82,110 +64,267 @@ func Parse(input string) (*ArchitectureDiagram, error) {
 		return nil, fmt.Errorf("empty input")
 	}
 
-	rawLines := diagram.SplitLines(input)
-	lines := diagram.RemoveComments(rawLines)
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("no content found")
-	}
+	s := parser.NewScanner(input)
+	s.SkipNewlines()
 
-	if !strings.HasPrefix(strings.TrimSpace(lines[0]), ArchitectureBetaKeyword) {
+	// "architecture-beta" tokenizes as Ident("architecture") Operator("-") Ident("beta")
+	keyword := collectKeyword(s)
+	if keyword != ArchitectureBetaKeyword {
 		return nil, fmt.Errorf("expected %q keyword", ArchitectureBetaKeyword)
 	}
+	s.SkipNewlines()
 
 	d := &ArchitectureDiagram{}
-	_, err := parseArchLines(d, lines[1:], nil)
-	if err != nil {
+
+	if err := parseStatements(s, d, nil); err != nil {
 		return nil, err
 	}
 
 	return d, nil
 }
 
-func parseArchLines(d *ArchitectureDiagram, lines []string, currentGroup *Group) (int, error) {
-	i := 0
-	for i < len(lines) {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			i++
-			continue
-		}
-
-		// End of group
-		if groupEndRegex.MatchString(trimmed) {
-			return i + 1, nil
-		}
-
-		// Group start
-		if m := groupStartRegex.FindStringSubmatch(trimmed); m != nil {
-			g := &Group{
-				ID:    m[1],
-				Icon:  m[2],
-				Label: m[3],
-			}
-			if g.Label == "" {
-				g.Label = g.ID
-			}
-			i++
-			consumed, err := parseArchLines(d, lines[i:], g)
-			if err != nil {
-				return 0, err
-			}
-			i += consumed
-			if currentGroup != nil {
-				currentGroup.Groups = append(currentGroup.Groups, g)
-			} else {
-				d.Groups = append(d.Groups, g)
-			}
-			continue
-		}
-
-		// Junction
-		if m := junctionRegex.FindStringSubmatch(trimmed); m != nil {
-			svc := &Service{ID: m[1], Label: m[1]}
-			if currentGroup != nil {
-				currentGroup.Services = append(currentGroup.Services, svc)
-			} else {
-				d.Services = append(d.Services, svc)
-			}
-			i++
-			continue
-		}
-
-		// Service
-		if m := serviceRegex.FindStringSubmatch(trimmed); m != nil {
-			svc := &Service{
-				ID:    m[1],
-				Icon:  m[2],
-				Label: m[3],
-			}
-			if svc.Label == "" {
-				svc.Label = svc.ID
-			}
-			if currentGroup != nil {
-				currentGroup.Services = append(currentGroup.Services, svc)
-			} else {
-				d.Services = append(d.Services, svc)
-			}
-			i++
-			continue
-		}
-
-		// Connection
-		if m := connectionRegex.FindStringSubmatch(trimmed); m != nil {
-			conn := &Connection{
-				From:     m[1],
-				FromEdge: m[2],
-				To:       m[4],
-				ToEdge:   m[5],
-				Directed: m[3] == "-->",
-			}
-			d.Connections = append(d.Connections, conn)
-			i++
-			continue
-		}
-
-		// Skip unrecognized lines
-		i++
+func collectKeyword(s *parser.Scanner) string {
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent {
+		return ""
 	}
-	return i, nil
+	var b strings.Builder
+	b.WriteString(s.Next().Text)
+	if s.Peek().Kind == parser.TokenOperator && s.Peek().Text == "-" {
+		b.WriteString(s.Next().Text)
+		if s.Peek().Kind == parser.TokenIdent {
+			b.WriteString(s.Next().Text)
+		}
+	}
+	return b.String()
+}
+
+func parseStatements(s *parser.Scanner, d *ArchitectureDiagram, currentGroup *Group) error {
+	for !s.AtEnd() {
+		s.SkipNewlines()
+		if s.AtEnd() {
+			break
+		}
+
+		tok := s.Peek()
+
+		// End of group: '}'
+		if tok.Kind == parser.TokenRBrace {
+			s.Next()
+			return nil
+		}
+
+		if tok.Kind != parser.TokenIdent {
+			parser.SkipToEndOfLine(s)
+			continue
+		}
+
+		switch tok.Text {
+		case "group":
+			if err := parseGroup(s, d, currentGroup); err != nil {
+				return err
+			}
+			continue
+		case "service":
+			parseService(s, d, currentGroup)
+			continue
+		case "junction":
+			parseJunction(s, d, currentGroup)
+			continue
+		}
+
+		// Try connection: name[:edge] --> name[:edge]
+		if tryParseConnection(s, d) {
+			continue
+		}
+
+		parser.SkipToEndOfLine(s)
+	}
+	return nil
+}
+
+// parseGroup handles: group name(icon)[label] {
+func parseGroup(s *parser.Scanner, d *ArchitectureDiagram, currentGroup *Group) error {
+	s.Next() // consume "group"
+	s.SkipWhitespace()
+
+	id, icon, label := parseServiceIDIconLabel(s)
+	if id == "" {
+		parser.SkipToEndOfLine(s)
+		return nil
+	}
+
+	g := &Group{ID: id, Icon: icon, Label: label}
+	if g.Label == "" {
+		g.Label = g.ID
+	}
+
+	s.SkipWhitespace()
+	if s.Peek().Kind == parser.TokenLBrace {
+		s.Next()
+	}
+	s.SkipNewlines()
+
+	if err := parseStatements(s, d, g); err != nil {
+		return err
+	}
+
+	if currentGroup != nil {
+		currentGroup.Groups = append(currentGroup.Groups, g)
+	} else {
+		d.Groups = append(d.Groups, g)
+	}
+	return nil
+}
+
+// parseService handles: service name(icon)[label]
+func parseService(s *parser.Scanner, d *ArchitectureDiagram, currentGroup *Group) {
+	s.Next() // consume "service"
+	s.SkipWhitespace()
+
+	id, icon, label := parseServiceIDIconLabel(s)
+	if id == "" {
+		parser.SkipToEndOfLine(s)
+		return
+	}
+
+	svc := &Service{ID: id, Icon: icon, Label: label}
+	if svc.Label == "" {
+		svc.Label = svc.ID
+	}
+
+	if currentGroup != nil {
+		currentGroup.Services = append(currentGroup.Services, svc)
+	} else {
+		d.Services = append(d.Services, svc)
+	}
+}
+
+// parseJunction handles: junction name
+func parseJunction(s *parser.Scanner, d *ArchitectureDiagram, currentGroup *Group) {
+	s.Next() // consume "junction"
+	s.SkipWhitespace()
+
+	nameTok := s.Peek()
+	if nameTok.Kind != parser.TokenIdent {
+		parser.SkipToEndOfLine(s)
+		return
+	}
+	name := s.Next().Text
+
+	svc := &Service{ID: name, Label: name}
+	if currentGroup != nil {
+		currentGroup.Services = append(currentGroup.Services, svc)
+	} else {
+		d.Services = append(d.Services, svc)
+	}
+}
+
+// parseServiceIDIconLabel parses: name(icon)[label]
+func parseServiceIDIconLabel(s *parser.Scanner) (id, icon, label string) {
+	tok := s.Peek()
+	if tok.Kind != parser.TokenIdent {
+		return "", "", ""
+	}
+	id = s.Next().Text
+
+	// Optional (icon)
+	if s.Peek().Kind == parser.TokenLParen {
+		s.Next() // consume '('
+		var parts []string
+		for !s.AtEnd() {
+			t := s.Peek()
+			if t.Kind == parser.TokenRParen {
+				s.Next()
+				break
+			}
+			if t.Kind == parser.TokenNewline || t.Kind == parser.TokenEOF {
+				break
+			}
+			s.Next()
+			parts = append(parts, t.Text)
+		}
+		icon = strings.Join(parts, "")
+	}
+
+	// Optional [label]
+	if s.Peek().Kind == parser.TokenLBracket {
+		s.Next() // consume '['
+		var parts []string
+		for !s.AtEnd() {
+			t := s.Peek()
+			if t.Kind == parser.TokenRBracket {
+				s.Next()
+				break
+			}
+			if t.Kind == parser.TokenNewline || t.Kind == parser.TokenEOF {
+				break
+			}
+			s.Next()
+			parts = append(parts, t.Text)
+		}
+		label = strings.Join(parts, "")
+	}
+
+	return id, icon, label
+}
+
+// tryParseConnection attempts: name[:edge] --> name[:edge] or name[:edge] -- name[:edge]
+func tryParseConnection(s *parser.Scanner, d *ArchitectureDiagram) bool {
+	saved := s.Save()
+
+	fromTok := s.Peek()
+	if fromTok.Kind != parser.TokenIdent {
+		return false
+	}
+	from := s.Next().Text
+
+	// Optional :edge
+	fromEdge := ""
+	if s.Peek().Kind == parser.TokenColon {
+		s.Next()
+		if s.Peek().Kind == parser.TokenIdent {
+			fromEdge = s.Next().Text
+		}
+	}
+	s.SkipWhitespace()
+
+	// Expect "-->" or "--"
+	opTok := s.Peek()
+	if opTok.Kind != parser.TokenOperator {
+		s.Restore(saved)
+		return false
+	}
+	arrow := opTok.Text
+	if arrow != "-->" && arrow != "--" {
+		s.Restore(saved)
+		return false
+	}
+	s.Next()
+	s.SkipWhitespace()
+
+	toTok := s.Peek()
+	if toTok.Kind != parser.TokenIdent {
+		s.Restore(saved)
+		return false
+	}
+	to := s.Next().Text
+
+	// Optional :edge
+	toEdge := ""
+	if s.Peek().Kind == parser.TokenColon {
+		s.Next()
+		if s.Peek().Kind == parser.TokenIdent {
+			toEdge = s.Next().Text
+		}
+	}
+
+	d.Connections = append(d.Connections, &Connection{
+		From:     from,
+		FromEdge: fromEdge,
+		To:       to,
+		ToEdge:   toEdge,
+		Directed: arrow == "-->",
+	})
+	return true
 }
