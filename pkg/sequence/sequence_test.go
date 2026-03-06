@@ -192,24 +192,6 @@ func TestParticipantParsing(t *testing.T) {
 	}
 }
 
-func TestSplitLines(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected []string
-	}{
-		{"A->>B: Hello", []string{"A->>B: Hello"}},
-		{"line1\nline2\nline3", []string{"line1", "line2", "line3"}},
-		{"line1\\nline2\\nline3", []string{"line1", "line2", "line3"}},
-		{"", []string{""}},
-	}
-
-	for _, tt := range tests {
-		result := diagram.SplitLines(tt.input)
-		if len(result) != len(tt.expected) {
-			t.Errorf("SplitLines(%q) len = %d, want %d", tt.input, len(result), len(tt.expected))
-		}
-	}
-}
 
 func TestRemoveComments(t *testing.T) {
 	tests := []struct {

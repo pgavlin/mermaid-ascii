@@ -251,23 +251,6 @@ func TestExpect(t *testing.T) {
 	}
 }
 
-func TestEscapedNewlines(t *testing.T) {
-	// Scanner should normalize \n escape sequences
-	s := NewScanner("A\\nB")
-	tok := s.Next()
-	if tok.Kind != TokenIdent || tok.Text != "A" {
-		t.Errorf("expected Ident(A), got %s(%q)", tok.Kind, tok.Text)
-	}
-	tok = s.Next()
-	if tok.Kind != TokenNewline {
-		t.Errorf("expected Newline, got %s(%q)", tok.Kind, tok.Text)
-	}
-	tok = s.Next()
-	if tok.Kind != TokenIdent || tok.Text != "B" {
-		t.Errorf("expected Ident(B), got %s(%q)", tok.Kind, tok.Text)
-	}
-}
-
 func TestSkipWhitespace(t *testing.T) {
 	s := NewScanner("  \t A")
 	s.SkipWhitespace()

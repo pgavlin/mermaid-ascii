@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/render"
 )
 
 // TestMermaidJSDocsExamples validates that examples from the official Mermaid.js
@@ -848,12 +849,12 @@ server.process(data)`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := RenderDiagram(tt.input, config)
+			output, err := render.Render(tt.input, config)
 			if err != nil {
-				t.Fatalf("RenderDiagram error: %v", err)
+				t.Fatalf("render.Render error: %v", err)
 			}
 			if len(strings.TrimSpace(output)) == 0 {
-				t.Error("RenderDiagram produced empty output")
+				t.Error("render.Render produced empty output")
 			}
 		})
 	}

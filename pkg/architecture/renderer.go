@@ -4,23 +4,18 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// BoxChars holds the characters used for rendering.
-type BoxChars struct {
-	TopLeft     rune
-	TopRight    rune
-	BottomLeft  rune
-	BottomRight rune
-	Horizontal  rune
-	Vertical    rune
-	Arrow       string
-	Line        string
+type archChars struct {
+	canvas.BoxChars
+	Arrow string
+	Line  string
 }
 
-var asciiChars = BoxChars{'+', '+', '+', '+', '-', '|', "-->", "---"}
-var unicodeChars = BoxChars{'┌', '┐', '└', '┘', '─', '│', "──>", "───"}
+var asciiChars = archChars{BoxChars: canvas.ASCIIBox, Arrow: "-->", Line: "---"}
+var unicodeChars = archChars{BoxChars: canvas.UnicodeBox, Arrow: "──>", Line: "───"}
 
 // Render renders an architecture diagram as ASCII/Unicode text.
 func Render(d *ArchitectureDiagram, config *diagram.Config) (string, error) {
@@ -63,7 +58,7 @@ func Render(d *ArchitectureDiagram, config *diagram.Config) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func renderService(svc *Service, chars BoxChars, indent int) []string {
+func renderService(svc *Service, chars archChars, indent int) []string {
 	prefix := strings.Repeat("  ", indent)
 	label := svc.Label
 	boxWidth := len(label) + 4
@@ -78,7 +73,7 @@ func renderService(svc *Service, chars BoxChars, indent int) []string {
 	return result
 }
 
-func renderGroup(g *Group, chars BoxChars, indent int) []string {
+func renderGroup(g *Group, chars archChars, indent int) []string {
 	prefix := strings.Repeat("  ", indent)
 
 	var inner []string
@@ -118,7 +113,7 @@ func renderGroup(g *Group, chars BoxChars, indent int) []string {
 	return result
 }
 
-func renderConnection(conn *Connection, chars BoxChars) string {
+func renderConnection(conn *Connection, chars archChars) string {
 	arrow := chars.Line
 	if conn.Directed {
 		arrow = chars.Arrow

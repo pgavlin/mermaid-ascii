@@ -1,8 +1,6 @@
 package graph
 
 import (
-	"fmt"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,7 +29,7 @@ func (g *graph) determinePath(e *edge) {
 	// Get preferred path
 	preferredPath, err = g.getPath(from, to)
 	if err != nil {
-		fmt.Printf("Error getting path from %v to %v: %v", from, to, err)
+		log.Warnf("Error getting path from %v to %v: %v", from, to, err)
 		// This is a big assumption, but if we can't get the preferred path, we assume the alternative path is better
 		e.startDir = alternativeDir
 		e.endDir = alternativeOppositeDir
@@ -47,7 +45,7 @@ func (g *graph) determinePath(e *edge) {
 
 	alternativePath, err = g.getPath(from, to)
 	if err != nil {
-		fmt.Printf("Error getting path from %v to %v: %v", from, to, err)
+		log.Warnf("Error getting path from %v to %v: %v", from, to, err)
 		e.startDir = preferredDir
 		e.endDir = preferredOppositeDir
 		e.path = preferredPath

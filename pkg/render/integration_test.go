@@ -1,11 +1,11 @@
-package cmd
+package render
 
 import (
-	"github.com/pgavlin/mermaid-ascii/pkg/sequence"
 	"strings"
 	"testing"
 
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/sequence"
 )
 
 // TestSequenceDiagramIntegration tests end-to-end rendering of sequence diagrams.
@@ -65,7 +65,7 @@ func TestSequenceDiagramIntegration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := diagram.NewTestConfig(false, "cli") // Unicode, CLI style
 
-			output, err := RenderDiagram(tt.input, config)
+			output, err := Render(tt.input, config)
 
 			if tt.wantNoError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestSequenceDiagramIntegration_ASCII(t *testing.T) {
 
 	config := diagram.NewTestConfig(true, "cli") // ASCII, CLI style
 
-	output, err := RenderDiagram(input, config)
+	output, err := Render(input, config)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestSequenceDiagramIntegration_ErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := diagram.NewTestConfig(false, "cli") // Unicode, CLI style
-			_, err := RenderDiagram(tt.input, config)
+			_, err := Render(tt.input, config)
 
 			if tt.shouldError && err == nil {
 				t.Error("Expected error but got none")
@@ -157,8 +157,8 @@ func TestSequenceDiagramIntegration_ErrorHandling(t *testing.T) {
 	}
 }
 
-// TestDiagramFactoryIntegration tests diagram type detection.
-func TestDiagramFactoryIntegration(t *testing.T) {
+// TestDetectIntegration tests diagram type detection.
+func TestDetectIntegration(t *testing.T) {
 	tests := []struct {
 		name         string
 		input        string
@@ -180,9 +180,9 @@ func TestDiagramFactoryIntegration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			diag, err := DiagramFactory(tt.input)
+			diag, err := Detect(tt.input)
 			if err != nil {
-				t.Fatalf("Factory error: %v", err)
+				t.Fatalf("Detect error: %v", err)
 			}
 
 			if diag.Type() != tt.expectedType {
@@ -222,7 +222,7 @@ func BenchmarkSequenceDiagramRendering(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := RenderDiagram(input, config)
+		_, err := Render(input, config)
 		if err != nil {
 			b.Fatalf("Render error: %v", err)
 		}
@@ -246,6 +246,22 @@ func BenchmarkSequenceDiagramParsing(b *testing.B) {
 	}
 }
 
+// TestRender_EscapedNewlines verifies that literal \n sequences in input are
+// normalized to real newlines (for curl compatibility).
+func TestRender_EscapedNewlines(t *testing.T) {
+	// Input with literal \n instead of real newlines
+	input := `graph LR\n    A-->B`
+	config := diagram.NewTestConfig(true, "cli")
+
+	output, err := Render(input, config)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !strings.Contains(output, "A") || !strings.Contains(output, "B") {
+		t.Errorf("Expected output with nodes A and B, got:\n%s", output)
+	}
+}
+
 // TestRenderConfig_Defaults tests that default configuration works correctly.
 func TestRenderConfig_Defaults(t *testing.T) {
 	config := diagram.DefaultConfig()
@@ -266,7 +282,7 @@ func TestRenderConfig_Defaults(t *testing.T) {
     A->>B: Test`
 
 	testConfig := diagram.NewTestConfig(false, "cli")
-	output, err := RenderDiagram(input, testConfig)
+	output, err := Render(input, testConfig)
 	if err != nil {
 		t.Errorf("Default config failed to render: %v", err)
 	}

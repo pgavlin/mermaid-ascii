@@ -1,7 +1,6 @@
 package diagram
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -29,10 +28,4 @@ func RemoveComments(lines []string) []string {
 	}
 
 	return cleaned
-}
-
-// SplitLines splits input on both actual newlines and escaped newlines (for curl compatibility).
-func SplitLines(input string) []string {
-	newlinePattern := regexp.MustCompile(`\n|\\n`)
-	return newlinePattern.Split(input, -1)
 }

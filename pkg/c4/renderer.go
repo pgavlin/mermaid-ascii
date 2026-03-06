@@ -4,21 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
-
-// BoxChars holds the characters used for rendering.
-type BoxChars struct {
-	TopLeft     rune
-	TopRight    rune
-	BottomLeft  rune
-	BottomRight rune
-	Horizontal  rune
-	Vertical    rune
-}
-
-var asciiChars = BoxChars{'+', '+', '+', '+', '-', '|'}
-var unicodeChars = BoxChars{'┌', '┐', '└', '┘', '─', '│'}
 
 // Render renders a C4 diagram as ASCII/Unicode text.
 func Render(d *C4Diagram, config *diagram.Config) (string, error) {
@@ -29,9 +17,9 @@ func Render(d *C4Diagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := unicodeChars
+	chars := canvas.UnicodeBox
 	if config.UseAscii {
-		chars = asciiChars
+		chars = canvas.ASCIIBox
 	}
 
 	var lines []string
@@ -58,7 +46,7 @@ func Render(d *C4Diagram, config *diagram.Config) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func renderElement(elem *Element, chars BoxChars, indent int) []string {
+func renderElement(elem *Element, chars canvas.BoxChars, indent int) []string {
 	prefix := strings.Repeat("  ", indent)
 	label := elem.Label
 	details := ""
@@ -99,7 +87,7 @@ func renderElement(elem *Element, chars BoxChars, indent int) []string {
 	return result
 }
 
-func renderBoundary(b *Boundary, chars BoxChars, indent int) []string {
+func renderBoundary(b *Boundary, chars canvas.BoxChars, indent int) []string {
 	prefix := strings.Repeat("  ", indent)
 
 	var inner []string

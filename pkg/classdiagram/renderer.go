@@ -4,54 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
-
-// Box-drawing characters for Unicode mode.
-const (
-	uTopLeft     = '┌'
-	uTopRight    = '┐'
-	uBottomLeft  = '└'
-	uBottomRight = '┘'
-	uHorizontal  = '─'
-	uVertical    = '│'
-	uTeeLeft     = '├'
-	uTeeRight    = '┤'
-
-	aTopLeft     = '+'
-	aTopRight    = '+'
-	aBottomLeft  = '+'
-	aBottomRight = '+'
-	aHorizontal  = '-'
-	aVertical    = '|'
-	aTeeLeft     = '+'
-	aTeeRight    = '+'
-)
-
-type boxChars struct {
-	topLeft     rune
-	topRight    rune
-	bottomLeft  rune
-	bottomRight rune
-	horizontal  rune
-	vertical    rune
-	teeLeft     rune
-	teeRight    rune
-}
-
-var unicodeChars = boxChars{
-	topLeft: uTopLeft, topRight: uTopRight,
-	bottomLeft: uBottomLeft, bottomRight: uBottomRight,
-	horizontal: uHorizontal, vertical: uVertical,
-	teeLeft: uTeeLeft, teeRight: uTeeRight,
-}
-
-var asciiChars = boxChars{
-	topLeft: aTopLeft, topRight: aTopRight,
-	bottomLeft: aBottomLeft, bottomRight: aBottomRight,
-	horizontal: aHorizontal, vertical: aVertical,
-	teeLeft: aTeeLeft, teeRight: aTeeRight,
-}
 
 // Render renders a ClassDiagram to a string.
 func Render(cd *ClassDiagram, config *diagram.Config) (string, error) {
@@ -62,9 +17,9 @@ func Render(cd *ClassDiagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := unicodeChars
+	chars := canvas.UnicodeBox
 	if config.UseAscii {
-		chars = asciiChars
+		chars = canvas.ASCIIBox
 	}
 
 	var lines []string
@@ -106,7 +61,7 @@ func Render(cd *ClassDiagram, config *diagram.Config) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func renderClassBox(cls *Class, chars boxChars) ([]string, int) {
+func renderClassBox(cls *Class, chars canvas.BoxChars) ([]string, int) {
 	// Calculate width: max of class name and all members
 	width := len(cls.Name) + 2 // 1 space padding on each side
 	for _, m := range cls.Members {
@@ -123,31 +78,31 @@ func renderClassBox(cls *Class, chars boxChars) ([]string, int) {
 	var lines []string
 
 	// Top border
-	lines = append(lines, string(chars.topLeft)+strings.Repeat(string(chars.horizontal), width)+string(chars.topRight))
+	lines = append(lines, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TopRight))
 
 	// Class name centered
 	nameLen := len(cls.Name)
 	pad := (width - nameLen) / 2
-	nameLine := string(chars.vertical) + strings.Repeat(" ", pad) + cls.Name + strings.Repeat(" ", width-pad-nameLen) + string(chars.vertical)
+	nameLine := string(chars.Vertical) + strings.Repeat(" ", pad) + cls.Name + strings.Repeat(" ", width-pad-nameLen) + string(chars.Vertical)
 	lines = append(lines, nameLine)
 
 	// Separator between name and members
-	lines = append(lines, string(chars.teeLeft)+strings.Repeat(string(chars.horizontal), width)+string(chars.teeRight))
+	lines = append(lines, string(chars.TeeRight)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TeeLeft))
 
 	// Members
 	if len(cls.Members) == 0 {
 		// Empty body
-		lines = append(lines, string(chars.vertical)+strings.Repeat(" ", width)+string(chars.vertical))
+		lines = append(lines, string(chars.Vertical)+strings.Repeat(" ", width)+string(chars.Vertical))
 	} else {
 		for _, m := range cls.Members {
 			mStr := formatMember(m)
-			memberLine := string(chars.vertical) + " " + mStr + strings.Repeat(" ", width-len(mStr)-1) + string(chars.vertical)
+			memberLine := string(chars.Vertical) + " " + mStr + strings.Repeat(" ", width-len(mStr)-1) + string(chars.Vertical)
 			lines = append(lines, memberLine)
 		}
 	}
 
 	// Bottom border
-	lines = append(lines, string(chars.bottomLeft)+strings.Repeat(string(chars.horizontal), width)+string(chars.bottomRight))
+	lines = append(lines, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.BottomRight))
 
 	return lines, width
 }
@@ -186,7 +141,7 @@ func formatMember(m *Member) string {
 	return sb.String()
 }
 
-func renderRelationshipLine(rel *Relationship, chars boxChars, useAscii bool) string {
+func renderRelationshipLine(rel *Relationship, chars canvas.BoxChars, useAscii bool) string {
 	var sb strings.Builder
 	sb.WriteString(rel.From)
 

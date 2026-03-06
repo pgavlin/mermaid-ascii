@@ -48,16 +48,14 @@ type Config struct {
 // The returned config is guaranteed to pass validation.
 func DefaultConfig() *Config {
 	return &Config{
-		UseAscii:   false, // Use Unicode by default for better appearance
-		ShowCoords: false,
-		Verbose:    false,
-		// Graph defaults
-		BoxBorderPadding: 1,
-		PaddingBetweenX:  5,
-		PaddingBetweenY:  5,
-		GraphDirection:   "LR",
-		StyleType:        "cli",
-		// Sequence diagram defaults
+		UseAscii:                   false,
+		ShowCoords:                 false,
+		Verbose:                    false,
+		BoxBorderPadding:           1,
+		PaddingBetweenX:            5,
+		PaddingBetweenY:            5,
+		GraphDirection:             "LR",
+		StyleType:                  "cli",
 		SequenceParticipantSpacing: 5,
 		SequenceMessageSpacing:     1,
 		SequenceSelfMessageWidth:   4,
@@ -68,19 +66,10 @@ func DefaultConfig() *Config {
 // Returns an error if any values are invalid.
 // For default values, use DefaultConfig() instead.
 func NewConfig(useAscii bool, graphDirection, styleType string) (*Config, error) {
-	config := &Config{
-		UseAscii:                   useAscii,
-		ShowCoords:                 false,
-		Verbose:                    false,
-		BoxBorderPadding:           1,
-		PaddingBetweenX:            5,
-		PaddingBetweenY:            5,
-		GraphDirection:             graphDirection,
-		StyleType:                  styleType,
-		SequenceParticipantSpacing: 5,
-		SequenceMessageSpacing:     1,
-		SequenceSelfMessageWidth:   4,
-	}
+	config := DefaultConfig()
+	config.UseAscii = useAscii
+	config.GraphDirection = graphDirection
+	config.StyleType = styleType
 
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -92,20 +81,15 @@ func NewConfig(useAscii bool, graphDirection, styleType string) (*Config, error)
 // NewCLIConfig creates a Config suitable for CLI output with the given parameters.
 // Returns an error if any values are invalid.
 func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX, paddingY int, graphDirection string) (*Config, error) {
-	defaults := DefaultConfig()
-	config := &Config{
-		UseAscii:                   useAscii,
-		ShowCoords:                 showCoords,
-		Verbose:                    verbose,
-		BoxBorderPadding:           boxBorderPadding,
-		PaddingBetweenX:            paddingX,
-		PaddingBetweenY:            paddingY,
-		GraphDirection:             graphDirection,
-		StyleType:                  "cli",
-		SequenceParticipantSpacing: defaults.SequenceParticipantSpacing,
-		SequenceMessageSpacing:     defaults.SequenceMessageSpacing,
-		SequenceSelfMessageWidth:   defaults.SequenceSelfMessageWidth,
-	}
+	config := DefaultConfig()
+	config.UseAscii = useAscii
+	config.ShowCoords = showCoords
+	config.Verbose = verbose
+	config.BoxBorderPadding = boxBorderPadding
+	config.PaddingBetweenX = paddingX
+	config.PaddingBetweenY = paddingY
+	config.GraphDirection = graphDirection
+	config.StyleType = "cli"
 
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -117,20 +101,12 @@ func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX
 // NewWebConfig creates a Config suitable for web/HTML output with the given parameters.
 // Returns an error if any values are invalid.
 func NewWebConfig(useAscii bool, boxBorderPadding, paddingX, paddingY int) (*Config, error) {
-	defaults := DefaultConfig()
-	config := &Config{
-		UseAscii:                   useAscii,
-		ShowCoords:                 false,
-		Verbose:                    false,
-		BoxBorderPadding:           boxBorderPadding,
-		PaddingBetweenX:            paddingX,
-		PaddingBetweenY:            paddingY,
-		GraphDirection:             "LR",
-		StyleType:                  "html",
-		SequenceParticipantSpacing: defaults.SequenceParticipantSpacing,
-		SequenceMessageSpacing:     defaults.SequenceMessageSpacing,
-		SequenceSelfMessageWidth:   defaults.SequenceSelfMessageWidth,
-	}
+	config := DefaultConfig()
+	config.UseAscii = useAscii
+	config.BoxBorderPadding = boxBorderPadding
+	config.PaddingBetweenX = paddingX
+	config.PaddingBetweenY = paddingY
+	config.StyleType = "html"
 
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -185,7 +161,7 @@ func (c *Config) Validate() error {
 // ConfigError represents an invalid configuration value.
 type ConfigError struct {
 	Field   string
-	Value   interface{}
+	Value   any
 	Message string
 }
 

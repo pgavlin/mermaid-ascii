@@ -42,6 +42,10 @@ func Render(input string, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
+	// Normalize escaped newlines (e.g. from curl) once at the entry point,
+	// so individual parsers don't need to handle this.
+	input = strings.ReplaceAll(input, `\n`, "\n")
+
 	diag, err := Detect(input)
 	if err != nil {
 		return "", fmt.Errorf("failed to detect diagram type: %w", err)
@@ -68,7 +72,7 @@ type detector struct {
 // detectors lists all supported diagram types, checked in order.
 // Graph/flowchart is the fallback and is not in this list.
 var detectors = []detector{
-	{sequence.IsSequenceDiagram, func() diagram.Diagram { return &sequenceDiagram{} }},
+	{sequence.IsSequenceDiagram, func() diagram.Diagram { return &wrapper[sequence.SequenceDiagram]{name: "sequence", parse: sequence.Parse, render: sequence.Render} }},
 	{classdiagram.IsClassDiagram, func() diagram.Diagram { return &wrapper[classdiagram.ClassDiagram]{name: "classDiagram", parse: classdiagram.Parse, render: classdiagram.Render} }},
 	{statediagram.IsStateDiagram, func() diagram.Diagram { return &wrapper[statediagram.StateDiagram]{name: "stateDiagram", parse: statediagram.Parse, render: statediagram.Render} }},
 	{erdiagram.IsERDiagram, func() diagram.Diagram { return &wrapper[erdiagram.ERDiagram]{name: "erDiagram", parse: erdiagram.Parse, render: erdiagram.Render} }},
@@ -100,7 +104,7 @@ func Detect(input string) (diagram.Diagram, error) {
 		}
 	}
 	// Graph/flowchart is the default fallback
-	return &graphDiagram{}, nil
+	return &wrapper[graph.Properties]{name: "graph", parse: graph.Parse, render: graph.Render}, nil
 }
 
 // wrapper is a generic diagram adapter for diagram types that follow the
@@ -130,48 +134,3 @@ func (w *wrapper[T]) Render(config *diagram.Config) (string, error) {
 
 func (w *wrapper[T]) Type() string { return w.name }
 
-// graphDiagram wraps the graph/flowchart renderer.
-type graphDiagram struct {
-	properties *graph.Properties
-}
-
-func (gd *graphDiagram) Parse(input string) error {
-	p, err := graph.Parse(input)
-	if err != nil {
-		return err
-	}
-	gd.properties = p
-	return nil
-}
-
-func (gd *graphDiagram) Render(config *diagram.Config) (string, error) {
-	if gd.properties == nil {
-		return "", fmt.Errorf("graph diagram not parsed")
-	}
-	return graph.Render(gd.properties, config)
-}
-
-func (gd *graphDiagram) Type() string { return "graph" }
-
-// sequenceDiagram wraps the sequence diagram renderer.
-type sequenceDiagram struct {
-	parsed *sequence.SequenceDiagram
-}
-
-func (sd *sequenceDiagram) Parse(input string) error {
-	p, err := sequence.Parse(input)
-	if err != nil {
-		return err
-	}
-	sd.parsed = p
-	return nil
-}
-
-func (sd *sequenceDiagram) Render(config *diagram.Config) (string, error) {
-	if sd.parsed == nil {
-		return "", fmt.Errorf("sequence diagram not parsed")
-	}
-	return sequence.Render(sd.parsed, config)
-}
-
-func (sd *sequenceDiagram) Type() string { return "sequence" }

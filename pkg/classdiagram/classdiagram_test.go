@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
@@ -757,7 +758,7 @@ func TestRenderRelationshipNoLabel(t *testing.T) {
 		To:   "ClassB",
 		Type: Association,
 	}
-	result := renderRelationshipLine(rel, asciiChars, true)
+	result := renderRelationshipLine(rel, canvas.ASCIIBox, true)
 	if result != "ClassA --> ClassB" {
 		t.Errorf("got %q, want %q", result, "ClassA --> ClassB")
 	}
@@ -770,7 +771,7 @@ func TestRenderRelationshipWithFromLabelOnly(t *testing.T) {
 		Type:      Association,
 		FromLabel: "1",
 	}
-	result := renderRelationshipLine(rel, asciiChars, true)
+	result := renderRelationshipLine(rel, canvas.ASCIIBox, true)
 	if !strings.Contains(result, `"1"`) {
 		t.Errorf("expected fromLabel in output, got %q", result)
 	}
@@ -783,7 +784,7 @@ func TestRenderRelationshipWithToLabelOnly(t *testing.T) {
 		Type:    Association,
 		ToLabel: "*",
 	}
-	result := renderRelationshipLine(rel, asciiChars, true)
+	result := renderRelationshipLine(rel, canvas.ASCIIBox, true)
 	if !strings.Contains(result, `"*"`) {
 		t.Errorf("expected toLabel in output, got %q", result)
 	}
@@ -807,7 +808,7 @@ func TestRenderRelationshipLineAllTypes(t *testing.T) {
 	for _, tt := range types {
 		t.Run(tt.asciiArr, func(t *testing.T) {
 			rel := &Relationship{From: "X", To: "Y", Type: tt.relType}
-			result := renderRelationshipLine(rel, asciiChars, true)
+			result := renderRelationshipLine(rel, canvas.ASCIIBox, true)
 			expected := "X " + tt.asciiArr + " Y"
 			if result != expected {
 				t.Errorf("got %q, want %q", result, expected)

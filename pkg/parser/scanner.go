@@ -42,10 +42,7 @@ func (s *Scanner) Restore(saved ScannerPos) {
 }
 
 // NewScanner creates a new Scanner for the given input.
-// The input is preprocessed to normalize \n escape sequences (for curl compatibility).
 func NewScanner(input string) *Scanner {
-	// Normalize escaped newlines (literal \n in input) to actual newlines
-	input = strings.ReplaceAll(input, "\\n", "\n")
 	return &Scanner{
 		input: input,
 		pos:   0,

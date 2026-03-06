@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/render"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -65,7 +66,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Render diagram (automatically detects type)
-		output, err := RenderDiagram(string(mermaid), config)
+		output, err := render.Render(string(mermaid), config)
 		if err != nil {
 			log.Fatal(err)
 		}

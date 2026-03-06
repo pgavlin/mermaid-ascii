@@ -4,21 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
-
-// BoxChars holds the characters used for rendering.
-type BoxChars struct {
-	TopLeft     rune
-	TopRight    rune
-	BottomLeft  rune
-	BottomRight rune
-	Horizontal  rune
-	Vertical    rune
-}
-
-var asciiChars = BoxChars{'+', '+', '+', '+', '-', '|'}
-var unicodeChars = BoxChars{'┌', '┐', '└', '┘', '─', '│'}
 
 const defaultCellWidth = 12
 
@@ -31,9 +19,9 @@ func Render(d *BlockDiagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := unicodeChars
+	chars := canvas.UnicodeBox
 	if config.UseAscii {
-		chars = asciiChars
+		chars = canvas.ASCIIBox
 	}
 
 	var lines []string
@@ -42,7 +30,7 @@ func Render(d *BlockDiagram, config *diagram.Config) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func renderBlocks(blocks []*Block, columns int, chars BoxChars, indent int) []string {
+func renderBlocks(blocks []*Block, columns int, chars canvas.BoxChars, indent int) []string {
 	if columns <= 0 {
 		columns = 1
 	}
@@ -68,7 +56,7 @@ func renderBlocks(blocks []*Block, columns int, chars BoxChars, indent int) []st
 	return allLines
 }
 
-func renderRow(blocks []*Block, _ int, chars BoxChars, prefix string) []string {
+func renderRow(blocks []*Block, _ int, chars canvas.BoxChars, prefix string) []string {
 	// Calculate cell width
 	cellWidth := defaultCellWidth
 

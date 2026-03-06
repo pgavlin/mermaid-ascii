@@ -9,6 +9,7 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram/testutil"
 	"github.com/pgavlin/mermaid-ascii/pkg/graph"
+	"github.com/pgavlin/mermaid-ascii/pkg/render"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -71,7 +72,7 @@ func TestExtendedChars(t *testing.T) {
 	}
 }
 
-// TestGraphUseAsciiConfig tests that RenderDiagram respects config.UseAscii for graphs
+// TestGraphUseAsciiConfig tests that render.Render respects config.UseAscii for graphs
 func TestGraphUseAsciiConfig(t *testing.T) {
 	mermaidInput := `graph LR
 A --> B`
@@ -85,7 +86,7 @@ A --> B`
 		GraphDirection:   "LR",
 		StyleType:        "cli",
 	}
-	asciiOutput, err := RenderDiagram(mermaidInput, asciiConfig)
+	asciiOutput, err := render.Render(mermaidInput, asciiConfig)
 	if err != nil {
 		t.Fatalf("Failed to render with ASCII config: %v", err)
 	}
@@ -99,7 +100,7 @@ A --> B`
 		GraphDirection:   "LR",
 		StyleType:        "cli",
 	}
-	unicodeOutput, err := RenderDiagram(mermaidInput, unicodeConfig)
+	unicodeOutput, err := render.Render(mermaidInput, unicodeConfig)
 	if err != nil {
 		t.Fatalf("Failed to render with Unicode config: %v", err)
 	}

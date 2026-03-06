@@ -62,7 +62,7 @@ func Parse(input string) (*MindmapDiagram, error) {
 		return nil, fmt.Errorf("empty input")
 	}
 
-	rawLines := diagram.SplitLines(input)
+	rawLines := strings.Split(input, "\n")
 	lines := diagram.RemoveComments(rawLines)
 	if len(lines) == 0 {
 		return nil, fmt.Errorf("no content found")

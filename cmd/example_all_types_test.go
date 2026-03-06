@@ -5,11 +5,12 @@ import (
 	"strings"
 
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/render"
 )
 
-// ExampleRenderDiagram_allTypes demonstrates rendering one diagram of each
-// supported type through the RenderDiagram entry point.
-func ExampleRenderDiagram_allTypes() {
+// ExampleRender_allTypes demonstrates rendering one diagram of each
+// supported type through the render.Render entry point.
+func ExampleRender_allTypes() {
 	config := diagram.NewTestConfig(true, "cli")
 
 	diagrams := []struct {
@@ -151,7 +152,7 @@ Done
 	}
 
 	for _, d := range diagrams {
-		output, err := RenderDiagram(d.input, config)
+		output, err := render.Render(d.input, config)
 		if err != nil {
 			fmt.Printf("--- %s ---\nERROR: %v\n\n", d.name, err)
 			continue

@@ -4,22 +4,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// BoxChars holds the characters used for rendering.
-type BoxChars struct {
-	TopLeft     rune
-	TopRight    rune
-	BottomLeft  rune
-	BottomRight rune
-	Horizontal  rune
-	Vertical    rune
-	Arrow       string
+type reqChars struct {
+	canvas.BoxChars
+	Arrow string
 }
 
-var asciiChars = BoxChars{'+', '+', '+', '+', '-', '|', "-->"}
-var unicodeChars = BoxChars{'┌', '┐', '└', '┘', '─', '│', "──>"}
+var asciiChars = reqChars{BoxChars: canvas.ASCIIBox, Arrow: "-->"}
+var unicodeChars = reqChars{BoxChars: canvas.UnicodeBox, Arrow: "──>"}
 
 // Render renders a requirement diagram as ASCII/Unicode text.
 func Render(d *RequirementDiagram, config *diagram.Config) (string, error) {
@@ -61,7 +56,7 @@ func Render(d *RequirementDiagram, config *diagram.Config) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func renderRequirement(req *Requirement, chars BoxChars) []string {
+func renderRequirement(req *Requirement, chars reqChars) []string {
 	contentLines := []string{
 		fmt.Sprintf("<<%s>>", req.Type),
 		req.Name,
@@ -82,7 +77,7 @@ func renderRequirement(req *Requirement, chars BoxChars) []string {
 	return renderBox(contentLines, chars)
 }
 
-func renderReqElement(elem *ReqElement, chars BoxChars) []string {
+func renderReqElement(elem *ReqElement, chars reqChars) []string {
 	contentLines := []string{
 		"<<element>>",
 		elem.Name,
@@ -97,7 +92,7 @@ func renderReqElement(elem *ReqElement, chars BoxChars) []string {
 	return renderBox(contentLines, chars)
 }
 
-func renderBox(contentLines []string, chars BoxChars) []string {
+func renderBox(contentLines []string, chars reqChars) []string {
 	maxWidth := 0
 	for _, l := range contentLines {
 		if len(l) > maxWidth {

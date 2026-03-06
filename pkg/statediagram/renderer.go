@@ -4,32 +4,26 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-type boxChars struct {
-	topLeft     rune
-	topRight    rune
-	bottomLeft  rune
-	bottomRight rune
-	horizontal  rune
-	vertical    rune
-	arrowDown   string
-	arrowBody   string
+type stateChars struct {
+	canvas.BoxChars
+	arrowDown string
+	arrowBody string
 }
 
-var unicodeChars = boxChars{
-	topLeft: '┌', topRight: '┐',
-	bottomLeft: '└', bottomRight: '┘',
-	horizontal: '─', vertical: '│',
-	arrowDown: "▼", arrowBody: "│",
+var unicodeChars = stateChars{
+	BoxChars:  canvas.UnicodeBox,
+	arrowDown: "▼",
+	arrowBody: "│",
 }
 
-var asciiChars = boxChars{
-	topLeft: '+', topRight: '+',
-	bottomLeft: '+', bottomRight: '+',
-	horizontal: '-', vertical: '|',
-	arrowDown: "v", arrowBody: "|",
+var asciiChars = stateChars{
+	BoxChars:  canvas.ASCIIBox,
+	arrowDown: "v",
+	arrowBody: "|",
 }
 
 // Render renders a StateDiagram to a string.
@@ -134,7 +128,7 @@ func stateLabel(s *State) string {
 	return s.ID
 }
 
-func renderStateBox(label string, innerWidth int, chars boxChars) []string {
+func renderStateBox(label string, innerWidth int, chars stateChars) []string {
 	if len(label) > innerWidth {
 		innerWidth = len(label) + 2
 	}
@@ -142,16 +136,16 @@ func renderStateBox(label string, innerWidth int, chars boxChars) []string {
 	var lines []string
 
 	// Top border
-	lines = append(lines, string(chars.topLeft)+strings.Repeat(string(chars.horizontal), innerWidth)+string(chars.topRight))
+	lines = append(lines, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), innerWidth)+string(chars.TopRight))
 
 	// Label centered
 	labelLen := len(label)
 	pad := (innerWidth - labelLen) / 2
-	labelLine := string(chars.vertical) + strings.Repeat(" ", pad) + label + strings.Repeat(" ", innerWidth-pad-labelLen) + string(chars.vertical)
+	labelLine := string(chars.Vertical) + strings.Repeat(" ", pad) + label + strings.Repeat(" ", innerWidth-pad-labelLen) + string(chars.Vertical)
 	lines = append(lines, labelLine)
 
 	// Bottom border
-	lines = append(lines, string(chars.bottomLeft)+strings.Repeat(string(chars.horizontal), innerWidth)+string(chars.bottomRight))
+	lines = append(lines, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), innerWidth)+string(chars.BottomRight))
 
 	return lines
 }

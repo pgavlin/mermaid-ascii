@@ -4,33 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
-
-type boxChars struct {
-	topLeft     rune
-	topRight    rune
-	bottomLeft  rune
-	bottomRight rune
-	horizontal  rune
-	vertical    rune
-	teeLeft     rune
-	teeRight    rune
-}
-
-var unicodeChars = boxChars{
-	topLeft: '┌', topRight: '┐',
-	bottomLeft: '└', bottomRight: '┘',
-	horizontal: '─', vertical: '│',
-	teeLeft: '├', teeRight: '┤',
-}
-
-var asciiChars = boxChars{
-	topLeft: '+', topRight: '+',
-	bottomLeft: '+', bottomRight: '+',
-	horizontal: '-', vertical: '|',
-	teeLeft: '+', teeRight: '+',
-}
 
 // Render renders an ERDiagram to a string.
 func Render(erd *ERDiagram, config *diagram.Config) (string, error) {
@@ -41,9 +17,9 @@ func Render(erd *ERDiagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := unicodeChars
+	chars := canvas.UnicodeBox
 	if config.UseAscii {
-		chars = asciiChars
+		chars = canvas.ASCIIBox
 	}
 
 	var lines []string
@@ -69,7 +45,7 @@ func Render(erd *ERDiagram, config *diagram.Config) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func renderEntityBox(entity *Entity, chars boxChars) []string {
+func renderEntityBox(entity *Entity, chars canvas.BoxChars) []string {
 	// Calculate width
 	width := len(entity.Name) + 2 // 1 space padding on each side
 	for _, attr := range entity.Attributes {
@@ -86,30 +62,30 @@ func renderEntityBox(entity *Entity, chars boxChars) []string {
 	var lines []string
 
 	// Top border
-	lines = append(lines, string(chars.topLeft)+strings.Repeat(string(chars.horizontal), width)+string(chars.topRight))
+	lines = append(lines, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TopRight))
 
 	// Entity name centered
 	nameLen := len(entity.Name)
 	pad := (width - nameLen) / 2
-	nameLine := string(chars.vertical) + strings.Repeat(" ", pad) + entity.Name + strings.Repeat(" ", width-pad-nameLen) + string(chars.vertical)
+	nameLine := string(chars.Vertical) + strings.Repeat(" ", pad) + entity.Name + strings.Repeat(" ", width-pad-nameLen) + string(chars.Vertical)
 	lines = append(lines, nameLine)
 
 	// Separator
-	lines = append(lines, string(chars.teeLeft)+strings.Repeat(string(chars.horizontal), width)+string(chars.teeRight))
+	lines = append(lines, string(chars.TeeRight)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TeeLeft))
 
 	// Attributes
 	if len(entity.Attributes) == 0 {
-		lines = append(lines, string(chars.vertical)+strings.Repeat(" ", width)+string(chars.vertical))
+		lines = append(lines, string(chars.Vertical)+strings.Repeat(" ", width)+string(chars.Vertical))
 	} else {
 		for _, attr := range entity.Attributes {
 			attrStr := formatAttribute(attr)
-			attrLine := string(chars.vertical) + " " + attrStr + strings.Repeat(" ", width-len(attrStr)-1) + string(chars.vertical)
+			attrLine := string(chars.Vertical) + " " + attrStr + strings.Repeat(" ", width-len(attrStr)-1) + string(chars.Vertical)
 			lines = append(lines, attrLine)
 		}
 	}
 
 	// Bottom border
-	lines = append(lines, string(chars.bottomLeft)+strings.Repeat(string(chars.horizontal), width)+string(chars.bottomRight))
+	lines = append(lines, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.BottomRight))
 
 	return lines
 }

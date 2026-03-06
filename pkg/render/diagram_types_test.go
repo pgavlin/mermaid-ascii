@@ -1,4 +1,4 @@
-package cmd
+package render
 
 import (
 	"strings"
@@ -7,8 +7,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// TestDiagramTypes exercises the DiagramFactory → wrapper → Parse → Render path
-// for every diagram type registered in diagram_types.go.
+// TestDiagramTypes exercises the Detect → wrapper → Parse → Render path
+// for every diagram type registered in render.go.
 func TestDiagramTypes(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -214,23 +214,23 @@ server.process(data)`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Step 1: DiagramFactory should detect the correct type
-			diag, err := DiagramFactory(tt.input)
+			// Step 1: Detect should detect the correct type
+			diag, err := Detect(tt.input)
 			if err != nil {
-				t.Fatalf("DiagramFactory error: %v", err)
+				t.Fatalf("Detect error: %v", err)
 			}
 
-			// Step 4: Verify Type() returns the expected string
+			// Step 2: Verify Type() returns the expected string
 			if diag.Type() != tt.expectedType {
 				t.Errorf("Type() = %q, want %q", diag.Type(), tt.expectedType)
 			}
 
-			// Step 2: Parse the input
+			// Step 3: Parse the input
 			if err := diag.Parse(tt.input); err != nil {
 				t.Fatalf("Parse error: %v", err)
 			}
 
-			// Step 3: Render with config and verify non-empty output
+			// Step 4: Render with config and verify non-empty output
 			config := diagram.NewTestConfig(true, "cli")
 			output, err := diag.Render(config)
 			if err != nil {

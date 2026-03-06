@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
+	"github.com/pgavlin/mermaid-ascii/pkg/render"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
@@ -142,7 +143,7 @@ func renderMermaid(c *gin.Context) {
 		return
 	}
 	config.Verbose = Verbose // Allow verbose logging in web mode if enabled
-	result, err := RenderDiagram(mermaidString, config)
+	result, err := render.Render(mermaidString, config)
 	if err != nil {
 		log.Errorf("Rendering failed: %v", err)
 		c.String(http.StatusBadRequest, fmt.Sprintf("Failed to render diagram: %v", err))

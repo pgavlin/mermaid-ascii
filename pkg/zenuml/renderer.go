@@ -4,34 +4,28 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pgavlin/mermaid-ascii/pkg/canvas"
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// BoxChars holds the characters used for rendering.
-type BoxChars struct {
-	TopLeft     rune
-	TopRight    rune
-	BottomLeft  rune
-	BottomRight rune
-	Horizontal  rune
-	Vertical    rune
-	TeeDown     rune
-	TeeRight    rune
-	TeeLeft     rune
-	ArrowRight  rune
-	ArrowLeft   rune
-	SolidLine   rune
-	DottedLine  rune
+type zenumlChars struct {
+	canvas.BoxChars
+	ArrowRight rune
+	ArrowLeft  rune
+	SolidLine  rune
+	DottedLine rune
 }
 
-var asciiChars = BoxChars{'+', '+', '+', '+', '-', '|', '+', '+', '+', '>', '<', '-', '.'}
-var unicodeChars = BoxChars{
-	TopLeft: '\u250c', TopRight: '\u2510',
-	BottomLeft: '\u2514', BottomRight: '\u2518',
-	Horizontal: '\u2500', Vertical: '\u2502',
-	TeeDown: '\u252c', TeeRight: '\u251c', TeeLeft: '\u2524',
-	ArrowRight: '\u25ba', ArrowLeft: '\u25c4',
-	SolidLine: '\u2500', DottedLine: '\u2508',
+var asciiChars = zenumlChars{
+	BoxChars:   canvas.ASCIIBox,
+	ArrowRight: '>', ArrowLeft: '<',
+	SolidLine: '-', DottedLine: '.',
+}
+
+var unicodeChars = zenumlChars{
+	BoxChars:   canvas.UnicodeBox,
+	ArrowRight: '►', ArrowLeft: '◄',
+	SolidLine: '─', DottedLine: '┈',
 }
 
 const (
@@ -129,7 +123,7 @@ func calcLayout(d *ZenUMLDiagram) *layout {
 	return &layout{widths: widths, centers: centers, total: total}
 }
 
-func renderHeaders(d *ZenUMLDiagram, ly *layout, chars BoxChars) []string {
+func renderHeaders(d *ZenUMLDiagram, ly *layout, chars zenumlChars) []string {
 	var lines []string
 
 	// Top border
@@ -171,7 +165,7 @@ func buildHeaderLine(d *ZenUMLDiagram, ly *layout, draw func(int) string) string
 	return sb.String()
 }
 
-func buildLifeline(ly *layout, chars BoxChars) string {
+func buildLifeline(ly *layout, chars zenumlChars) string {
 	line := make([]rune, ly.total+1)
 	for i := range line {
 		line[i] = ' '
@@ -184,7 +178,7 @@ func buildLifeline(ly *layout, chars BoxChars) string {
 	return strings.TrimRight(string(line), " ")
 }
 
-func renderCallMessage(msg *Message, ly *layout, chars BoxChars) []string {
+func renderCallMessage(msg *Message, ly *layout, chars zenumlChars) []string {
 	var lines []string
 	from := ly.centers[msg.From.Index]
 	to := ly.centers[msg.To.Index]
@@ -220,8 +214,8 @@ func renderCallMessage(msg *Message, ly *layout, chars BoxChars) []string {
 	}
 
 	// Label line
-	start := minInt(from, to) + labelMargin
-	width := maxInt(ly.total+1, start+len(label)+10)
+	start := min(from, to) + labelMargin
+	width := max(ly.total+1, start+len(label)+10)
 	labelLine := makeLine(ly, chars, width)
 	for j, r := range label {
 		if start+j < len(labelLine) {
@@ -257,7 +251,7 @@ func renderCallMessage(msg *Message, ly *layout, chars BoxChars) []string {
 	return lines
 }
 
-func renderReturnMessage(msg *Message, ly *layout, chars BoxChars) []string {
+func renderReturnMessage(msg *Message, ly *layout, chars zenumlChars) []string {
 	var lines []string
 
 	// If we don't have from/to, skip
@@ -271,8 +265,8 @@ func renderReturnMessage(msg *Message, ly *layout, chars BoxChars) []string {
 	// Label
 	if msg.Label != "" {
 		label := "return " + msg.Label
-		start := minInt(from, to) + labelMargin
-		width := maxInt(ly.total+1, start+len(label)+10)
+		start := min(from, to) + labelMargin
+		width := max(ly.total+1, start+len(label)+10)
 		labelLine := makeLine(ly, chars, width)
 		for j, r := range label {
 			if start+j < len(labelLine) {
@@ -307,7 +301,7 @@ func renderReturnMessage(msg *Message, ly *layout, chars BoxChars) []string {
 }
 
 // makeLine creates a rune slice with lifelines drawn.
-func makeLine(ly *layout, chars BoxChars, width int) []rune {
+func makeLine(ly *layout, chars zenumlChars, width int) []rune {
 	line := make([]rune, width)
 	for i := range line {
 		line[i] = ' '
@@ -318,18 +312,4 @@ func makeLine(ly *layout, chars BoxChars, width int) []rune {
 		}
 	}
 	return line
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
