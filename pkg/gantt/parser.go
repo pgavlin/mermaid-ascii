@@ -10,8 +10,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// GanttKeyword is the Mermaid keyword that identifies a Gantt chart.
-const GanttKeyword = "gantt"
+// ganttKeyword is the Mermaid keyword that identifies a Gantt chart.
+const ganttKeyword = "gantt"
 
 // GanttDiagram represents a parsed Gantt chart with sections and tasks.
 type GanttDiagram struct {
@@ -47,7 +47,7 @@ func IsGanttDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == GanttKeyword
+		return trimmed == ganttKeyword
 	}
 	return false
 }
@@ -63,8 +63,8 @@ func Parse(input string) (*GanttDiagram, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != GanttKeyword {
-		return nil, fmt.Errorf("expected %q keyword", GanttKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != ganttKeyword {
+		return nil, fmt.Errorf("expected %q keyword", ganttKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

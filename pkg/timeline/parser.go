@@ -8,8 +8,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// TimelineKeyword is the keyword that identifies a timeline diagram in Mermaid syntax.
-const TimelineKeyword = "timeline"
+// timelineKeyword is the keyword that identifies a timeline diagram in Mermaid syntax.
+const timelineKeyword = "timeline"
 
 // TimelineDiagram represents a parsed timeline diagram with optional sections and events.
 type TimelineDiagram struct {
@@ -39,7 +39,7 @@ func IsTimelineDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == TimelineKeyword
+		return trimmed == timelineKeyword
 	}
 	return false
 }
@@ -55,8 +55,8 @@ func Parse(input string) (*TimelineDiagram, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != TimelineKeyword {
-		return nil, fmt.Errorf("expected %q keyword", TimelineKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != timelineKeyword {
+		return nil, fmt.Errorf("expected %q keyword", timelineKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

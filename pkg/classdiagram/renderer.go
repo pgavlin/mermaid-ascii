@@ -17,10 +17,7 @@ func Render(cd *ClassDiagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := canvas.UnicodeBox
-	if config.UseAscii {
-		chars = canvas.ASCIIBox
-	}
+	chars := canvas.Select(config.UseAscii)
 
 	var lines []string
 
@@ -78,13 +75,10 @@ func renderClassBox(cls *Class, chars canvas.BoxChars) ([]string, int) {
 	var lines []string
 
 	// Top border
-	lines = append(lines, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TopRight))
+	lines = append(lines, chars.TopBorder(width))
 
 	// Class name centered
-	nameLen := len(cls.Name)
-	pad := (width - nameLen) / 2
-	nameLine := string(chars.Vertical) + strings.Repeat(" ", pad) + cls.Name + strings.Repeat(" ", width-pad-nameLen) + string(chars.Vertical)
-	lines = append(lines, nameLine)
+	lines = append(lines, chars.CenterText(cls.Name, width))
 
 	// Separator between name and members
 	lines = append(lines, string(chars.TeeRight)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TeeLeft))
@@ -102,7 +96,7 @@ func renderClassBox(cls *Class, chars canvas.BoxChars) ([]string, int) {
 	}
 
 	// Bottom border
-	lines = append(lines, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.BottomRight))
+	lines = append(lines, chars.BottomBorder(width))
 
 	return lines, width
 }

@@ -8,8 +8,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// ClassDiagramKeyword is the Mermaid keyword that identifies a class diagram.
-const ClassDiagramKeyword = "classDiagram"
+// classDiagramKeyword is the Mermaid keyword that identifies a class diagram.
+const classDiagramKeyword = "classDiagram"
 
 // RelationType represents the type of relationship between classes.
 type RelationType int
@@ -77,7 +77,7 @@ func IsClassDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, ClassDiagramKeyword)
+		return strings.HasPrefix(trimmed, classDiagramKeyword)
 	}
 	return false
 }
@@ -93,8 +93,8 @@ func Parse(input string) (*ClassDiagram, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != ClassDiagramKeyword {
-		return nil, fmt.Errorf("expected %q keyword", ClassDiagramKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != classDiagramKeyword {
+		return nil, fmt.Errorf("expected %q keyword", classDiagramKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

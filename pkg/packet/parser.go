@@ -10,8 +10,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// PacketKeyword is the Mermaid keyword that identifies a packet diagram.
-const PacketKeyword = "packet-beta"
+// packetKeyword is the Mermaid keyword that identifies a packet diagram.
+const packetKeyword = "packet-beta"
 
 // PacketDiagram represents a parsed packet/protocol diagram.
 type PacketDiagram struct {
@@ -33,7 +33,7 @@ func IsPacketDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == PacketKeyword
+		return trimmed == packetKeyword
 	}
 	return false
 }
@@ -50,8 +50,8 @@ func Parse(input string) (*PacketDiagram, error) {
 
 	// "packet-beta" tokenizes as Ident("packet") Operator("-") Ident("beta")
 	keyword := collectKeyword(s)
-	if keyword != PacketKeyword {
-		return nil, fmt.Errorf("expected %q keyword", PacketKeyword)
+	if keyword != packetKeyword {
+		return nil, fmt.Errorf("expected %q keyword", packetKeyword)
 	}
 	s.SkipNewlines()
 

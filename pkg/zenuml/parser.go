@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// ZenUMLKeyword is the Mermaid keyword that identifies a ZenUML diagram.
-const ZenUMLKeyword = "zenuml"
+// zenUMLKeyword is the Mermaid keyword that identifies a ZenUML diagram.
+const zenUMLKeyword = "zenuml"
 
 // MessageType distinguishes sync, async, and return messages.
 type MessageType int
@@ -56,7 +56,7 @@ func IsZenUML(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, ZenUMLKeyword)
+		return strings.HasPrefix(trimmed, zenUMLKeyword)
 	}
 	return false
 }
@@ -78,8 +78,8 @@ func Parse(input string) (*ZenUMLDiagram, error) {
 
 	// Expect "zenuml" keyword
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != ZenUMLKeyword {
-		return nil, fmt.Errorf("expected %q keyword", ZenUMLKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != zenUMLKeyword {
+		return nil, fmt.Errorf("expected %q keyword", zenUMLKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

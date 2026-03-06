@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// QuadrantKeyword is the keyword that identifies a quadrant chart diagram in Mermaid syntax.
-const QuadrantKeyword = "quadrantChart"
+// quadrantKeyword is the keyword that identifies a quadrant chart diagram in Mermaid syntax.
+const quadrantKeyword = "quadrantChart"
 
 // QuadrantChart represents a parsed quadrant chart with axis labels, quadrant names, and data points.
 type QuadrantChart struct {
@@ -41,7 +41,7 @@ func IsQuadrantChart(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == QuadrantKeyword
+		return trimmed == quadrantKeyword
 	}
 	return false
 }
@@ -57,8 +57,8 @@ func Parse(input string) (*QuadrantChart, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != QuadrantKeyword {
-		return nil, fmt.Errorf("expected %q keyword", QuadrantKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != quadrantKeyword {
+		return nil, fmt.Errorf("expected %q keyword", quadrantKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

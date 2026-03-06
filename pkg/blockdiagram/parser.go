@@ -10,8 +10,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// BlockBetaKeyword is the Mermaid keyword that identifies a block-beta diagram.
-const BlockBetaKeyword = "block-beta"
+// blockBetaKeyword is the Mermaid keyword that identifies a block-beta diagram.
+const blockBetaKeyword = "block-beta"
 
 // Block represents a single block in the diagram.
 type Block struct {
@@ -37,7 +37,7 @@ func IsBlockDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, BlockBetaKeyword)
+		return strings.HasPrefix(trimmed, blockBetaKeyword)
 	}
 	return false
 }
@@ -54,8 +54,8 @@ func Parse(input string) (*BlockDiagram, error) {
 
 	// Expect "block-beta" which tokenizes as Ident("block") Operator("-") Ident("beta")
 	keyword := collectKeyword(s)
-	if keyword != BlockBetaKeyword {
-		return nil, fmt.Errorf("expected %q keyword", BlockBetaKeyword)
+	if keyword != blockBetaKeyword {
+		return nil, fmt.Errorf("expected %q keyword", blockBetaKeyword)
 	}
 	s.SkipNewlines()
 

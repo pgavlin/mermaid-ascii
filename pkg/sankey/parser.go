@@ -10,8 +10,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// SankeyBetaKeyword is the Mermaid keyword that identifies a Sankey diagram.
-const SankeyBetaKeyword = "sankey-beta"
+// sankeyBetaKeyword is the Mermaid keyword that identifies a Sankey diagram.
+const sankeyBetaKeyword = "sankey-beta"
 
 // Flow represents a single flow from source to target with a value.
 type Flow struct {
@@ -33,7 +33,7 @@ func IsSankeyDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, SankeyBetaKeyword)
+		return strings.HasPrefix(trimmed, sankeyBetaKeyword)
 	}
 	return false
 }
@@ -51,8 +51,8 @@ func Parse(input string) (*SankeyDiagram, error) {
 		return nil, fmt.Errorf("no content found")
 	}
 
-	if !strings.HasPrefix(strings.TrimSpace(lines[0]), SankeyBetaKeyword) {
-		return nil, fmt.Errorf("expected %q keyword", SankeyBetaKeyword)
+	if !strings.HasPrefix(strings.TrimSpace(lines[0]), sankeyBetaKeyword) {
+		return nil, fmt.Errorf("expected %q keyword", sankeyBetaKeyword)
 	}
 
 	d := &SankeyDiagram{}

@@ -17,10 +17,7 @@ func Render(d *C4Diagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := canvas.UnicodeBox
-	if config.UseAscii {
-		chars = canvas.ASCIIBox
-	}
+	chars := canvas.Select(config.UseAscii)
 
 	var lines []string
 
@@ -76,14 +73,11 @@ func renderElement(elem *Element, chars canvas.BoxChars, indent int) []string {
 	boxWidth := maxWidth + 4 // 2 padding on each side
 
 	var result []string
-	result = append(result, prefix+string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), boxWidth)+string(chars.TopRight))
+	result = append(result, prefix+chars.TopBorder(boxWidth))
 	for _, cl := range contentLines {
-		pad := boxWidth - len(cl)
-		left := pad / 2
-		right := pad - left
-		result = append(result, prefix+string(chars.Vertical)+strings.Repeat(" ", left)+cl+strings.Repeat(" ", right)+string(chars.Vertical))
+		result = append(result, prefix+chars.CenterText(cl, boxWidth))
 	}
-	result = append(result, prefix+string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), boxWidth)+string(chars.BottomRight))
+	result = append(result, prefix+chars.BottomBorder(boxWidth))
 	return result
 }
 
@@ -108,11 +102,8 @@ func renderBoundary(b *Boundary, chars canvas.BoxChars, indent int) []string {
 	}
 
 	var result []string
-	result = append(result, prefix+string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), maxWidth)+string(chars.TopRight))
-	titlePad := maxWidth - len(b.Label)
-	left := titlePad / 2
-	right := titlePad - left
-	result = append(result, prefix+string(chars.Vertical)+strings.Repeat(" ", left)+b.Label+strings.Repeat(" ", right)+string(chars.Vertical))
+	result = append(result, prefix+chars.TopBorder(maxWidth))
+	result = append(result, prefix+chars.CenterText(b.Label, maxWidth))
 	result = append(result, prefix+string(chars.Vertical)+strings.Repeat(string(chars.Horizontal), maxWidth)+string(chars.Vertical))
 
 	for _, l := range inner {
@@ -125,7 +116,7 @@ func renderBoundary(b *Boundary, chars canvas.BoxChars, indent int) []string {
 		result = append(result, prefix+string(chars.Vertical)+stripped+strings.Repeat(" ", padNeeded)+string(chars.Vertical))
 	}
 
-	result = append(result, prefix+string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), maxWidth)+string(chars.BottomRight))
+	result = append(result, prefix+chars.BottomBorder(maxWidth))
 	return result
 }
 

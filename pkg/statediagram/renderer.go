@@ -133,21 +133,11 @@ func renderStateBox(label string, innerWidth int, chars stateChars) []string {
 		innerWidth = len(label) + 2
 	}
 
-	var lines []string
-
-	// Top border
-	lines = append(lines, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), innerWidth)+string(chars.TopRight))
-
-	// Label centered
-	labelLen := len(label)
-	pad := (innerWidth - labelLen) / 2
-	labelLine := string(chars.Vertical) + strings.Repeat(" ", pad) + label + strings.Repeat(" ", innerWidth-pad-labelLen) + string(chars.Vertical)
-	lines = append(lines, labelLine)
-
-	// Bottom border
-	lines = append(lines, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), innerWidth)+string(chars.BottomRight))
-
-	return lines
+	return []string{
+		chars.TopBorder(innerWidth),
+		chars.CenterText(label, innerWidth),
+		chars.BottomBorder(innerWidth),
+	}
 }
 
 // orderStates returns states in a reasonable vertical order based on transitions.

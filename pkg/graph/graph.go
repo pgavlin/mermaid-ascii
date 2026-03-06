@@ -52,6 +52,7 @@ type graph struct {
 type subgraph struct {
 	name     string
 	nodes    []*node
+	nodeSet  map[*node]bool
 	parent   *subgraph
 	children []*subgraph
 	// Bounding box in drawing coordinates
@@ -130,6 +131,7 @@ func (g *graph) setSubgraphs(textSubgraphs []*textSubgraph) {
 		sg := &subgraph{
 			name:     tsg.name,
 			nodes:    []*node{},
+			nodeSet:  make(map[*node]bool),
 			children: []*subgraph{},
 		}
 
@@ -138,6 +140,7 @@ func (g *graph) setSubgraphs(textSubgraphs []*textSubgraph) {
 			node, err := g.getNode(nodeName)
 			if err == nil {
 				sg.nodes = append(sg.nodes, node)
+				sg.nodeSet[node] = true
 			}
 		}
 
@@ -439,10 +442,8 @@ func (g *graph) calculateSubgraphBoundingBoxes() {
 
 func (g *graph) isNodeInAnySubgraph(n *node) bool {
 	for _, sg := range g.subgraphs {
-		for _, sgNode := range sg.nodes {
-			if sgNode == n {
-				return true
-			}
+		if sg.nodeSet[n] {
+			return true
 		}
 	}
 	return false
@@ -450,10 +451,8 @@ func (g *graph) isNodeInAnySubgraph(n *node) bool {
 
 func (g *graph) getNodeSubgraph(n *node) *subgraph {
 	for _, sg := range g.subgraphs {
-		for _, sgNode := range sg.nodes {
-			if sgNode == n {
-				return sg
-			}
+		if sg.nodeSet[n] {
+			return sg
 		}
 	}
 	return nil

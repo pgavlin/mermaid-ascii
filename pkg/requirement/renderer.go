@@ -102,13 +102,10 @@ func renderBox(contentLines []string, chars reqChars) []string {
 	boxWidth := maxWidth + 4
 
 	var result []string
-	result = append(result, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), boxWidth)+string(chars.TopRight))
+	result = append(result, chars.TopBorder(boxWidth))
 	for _, l := range contentLines {
-		pad := boxWidth - len(l)
-		left := pad / 2
-		right := pad - left
-		result = append(result, string(chars.Vertical)+strings.Repeat(" ", left)+l+strings.Repeat(" ", right)+string(chars.Vertical))
+		result = append(result, chars.CenterText(l, boxWidth))
 	}
-	result = append(result, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), boxWidth)+string(chars.BottomRight))
+	result = append(result, chars.BottomBorder(boxWidth))
 	return result
 }

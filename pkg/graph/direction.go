@@ -35,8 +35,9 @@ func (d direction) getOpposite() direction {
 		return UpperRight
 	case Middle:
 		return Middle
+	default:
+		return Middle
 	}
-	panic("Unknown direction")
 }
 
 func (c gridCoord) Direction(dir direction) gridCoord {

@@ -19,10 +19,7 @@ func Render(d *BlockDiagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := canvas.UnicodeBox
-	if config.UseAscii {
-		chars = canvas.ASCIIBox
-	}
+	chars := canvas.Select(config.UseAscii)
 
 	var lines []string
 	lines = append(lines, renderBlocks(d.Blocks, d.Columns, chars, 0)...)
@@ -99,23 +96,9 @@ func renderRow(blocks []*Block, _ int, chars canvas.BoxChars, prefix string) []s
 			continue
 		}
 
-		topLine.WriteRune(chars.TopLeft)
-		topLine.WriteString(strings.Repeat(string(chars.Horizontal), w))
-		topLine.WriteRune(chars.TopRight)
-
-		label := b.Label
-		pad := w - len(label)
-		left := pad / 2
-		right := pad - left
-		midLine.WriteRune(chars.Vertical)
-		midLine.WriteString(strings.Repeat(" ", left))
-		midLine.WriteString(label)
-		midLine.WriteString(strings.Repeat(" ", right))
-		midLine.WriteRune(chars.Vertical)
-
-		botLine.WriteRune(chars.BottomLeft)
-		botLine.WriteString(strings.Repeat(string(chars.Horizontal), w))
-		botLine.WriteRune(chars.BottomRight)
+		topLine.WriteString(chars.TopBorder(w))
+		midLine.WriteString(chars.CenterText(b.Label, w))
+		botLine.WriteString(chars.BottomBorder(w))
 	}
 
 	result := []string{topLine.String(), midLine.String(), botLine.String()}

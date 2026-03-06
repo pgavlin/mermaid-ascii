@@ -128,16 +128,12 @@ func renderHeaders(d *ZenUMLDiagram, ly *layout, chars zenumlChars) []string {
 
 	// Top border
 	lines = append(lines, buildHeaderLine(d, ly, func(i int) string {
-		return string(chars.TopLeft) + strings.Repeat(string(chars.Horizontal), ly.widths[i]) + string(chars.TopRight)
+		return chars.TopBorder(ly.widths[i])
 	}))
 
 	// Label (use participant ID)
 	lines = append(lines, buildHeaderLine(d, ly, func(i int) string {
-		w := ly.widths[i]
-		label := d.Participants[i].ID
-		pad := (w - len(label)) / 2
-		return string(chars.Vertical) + strings.Repeat(" ", pad) + label +
-			strings.Repeat(" ", w-pad-len(label)) + string(chars.Vertical)
+		return chars.CenterText(d.Participants[i].ID, ly.widths[i])
 	}))
 
 	// Bottom border with lifeline tee

@@ -64,12 +64,9 @@ func renderService(svc *Service, chars archChars, indent int) []string {
 	boxWidth := len(label) + 4
 
 	var result []string
-	result = append(result, prefix+string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), boxWidth)+string(chars.TopRight))
-	pad := boxWidth - len(label)
-	left := pad / 2
-	right := pad - left
-	result = append(result, prefix+string(chars.Vertical)+strings.Repeat(" ", left)+label+strings.Repeat(" ", right)+string(chars.Vertical))
-	result = append(result, prefix+string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), boxWidth)+string(chars.BottomRight))
+	result = append(result, prefix+chars.TopBorder(boxWidth))
+	result = append(result, prefix+chars.CenterText(label, boxWidth))
+	result = append(result, prefix+chars.BottomBorder(boxWidth))
 	return result
 }
 
@@ -93,11 +90,8 @@ func renderGroup(g *Group, chars archChars, indent int) []string {
 	}
 
 	var result []string
-	result = append(result, prefix+string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), maxWidth)+string(chars.TopRight))
-	titlePad := maxWidth - len(g.Label)
-	left := titlePad / 2
-	right := titlePad - left
-	result = append(result, prefix+string(chars.Vertical)+strings.Repeat(" ", left)+g.Label+strings.Repeat(" ", right)+string(chars.Vertical))
+	result = append(result, prefix+chars.TopBorder(maxWidth))
+	result = append(result, prefix+chars.CenterText(g.Label, maxWidth))
 	result = append(result, prefix+string(chars.Vertical)+strings.Repeat(string(chars.Horizontal), maxWidth)+string(chars.Vertical))
 
 	for _, l := range inner {
@@ -109,7 +103,7 @@ func renderGroup(g *Group, chars archChars, indent int) []string {
 		result = append(result, prefix+string(chars.Vertical)+stripped+strings.Repeat(" ", padNeeded)+string(chars.Vertical))
 	}
 
-	result = append(result, prefix+string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), maxWidth)+string(chars.BottomRight))
+	result = append(result, prefix+chars.BottomBorder(maxWidth))
 	return result
 }
 

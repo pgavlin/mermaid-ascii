@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// XYChartKeyword is the keyword that identifies an XY chart diagram in Mermaid syntax.
-const XYChartKeyword = "xychart-beta"
+// xyChartKeyword is the keyword that identifies an XY chart diagram in Mermaid syntax.
+const xyChartKeyword = "xychart-beta"
 
 // DataSeries represents a named data series in a chart.
 type DataSeries struct {
@@ -38,7 +38,7 @@ func IsXYChart(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == XYChartKeyword
+		return trimmed == xyChartKeyword
 	}
 	return false
 }
@@ -55,8 +55,8 @@ func Parse(input string) (*XYChart, error) {
 
 	// "xychart-beta" tokenizes as Ident("xychart") Operator("-") Ident("beta")
 	keyword := collectKeyword(s)
-	if keyword != XYChartKeyword {
-		return nil, fmt.Errorf("expected %q keyword", XYChartKeyword)
+	if keyword != xyChartKeyword {
+		return nil, fmt.Errorf("expected %q keyword", xyChartKeyword)
 	}
 	s.SkipNewlines()
 

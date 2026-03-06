@@ -17,10 +17,7 @@ func Render(erd *ERDiagram, config *diagram.Config) (string, error) {
 		config = diagram.DefaultConfig()
 	}
 
-	chars := canvas.UnicodeBox
-	if config.UseAscii {
-		chars = canvas.ASCIIBox
-	}
+	chars := canvas.Select(config.UseAscii)
 
 	var lines []string
 
@@ -62,13 +59,10 @@ func renderEntityBox(entity *Entity, chars canvas.BoxChars) []string {
 	var lines []string
 
 	// Top border
-	lines = append(lines, string(chars.TopLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TopRight))
+	lines = append(lines, chars.TopBorder(width))
 
 	// Entity name centered
-	nameLen := len(entity.Name)
-	pad := (width - nameLen) / 2
-	nameLine := string(chars.Vertical) + strings.Repeat(" ", pad) + entity.Name + strings.Repeat(" ", width-pad-nameLen) + string(chars.Vertical)
-	lines = append(lines, nameLine)
+	lines = append(lines, chars.CenterText(entity.Name, width))
 
 	// Separator
 	lines = append(lines, string(chars.TeeRight)+strings.Repeat(string(chars.Horizontal), width)+string(chars.TeeLeft))
@@ -85,7 +79,7 @@ func renderEntityBox(entity *Entity, chars canvas.BoxChars) []string {
 	}
 
 	// Bottom border
-	lines = append(lines, string(chars.BottomLeft)+strings.Repeat(string(chars.Horizontal), width)+string(chars.BottomRight))
+	lines = append(lines, chars.BottomBorder(width))
 
 	return lines
 }

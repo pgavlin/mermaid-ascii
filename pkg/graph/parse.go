@@ -76,6 +76,7 @@ type textSubgraph struct {
 	id        string // unique identifier for edge references (e.g. "sg1" from "subgraph sg1 [Title]")
 	name      string // display label (e.g. "Title" from "subgraph sg1 [Title]")
 	nodes     []string
+	nodeSet   map[string]bool
 	parent    *textSubgraph
 	children  []*textSubgraph
 	direction string // per-subgraph direction (LR or TD), parsed but not yet applied to layout
@@ -511,6 +512,7 @@ func (p *graphParser) parseSubgraph() {
 		id:       id,
 		name:     name,
 		nodes:    []string{},
+		nodeSet:  make(map[string]bool),
 		children: []*textSubgraph{},
 	}
 
@@ -660,15 +662,9 @@ func (p *graphParser) addNewNodesToSubgraphs(existingNodes map[string]bool) {
 		nodeName := el.Key
 		if !existingNodes[nodeName] {
 			for _, sg := range p.subgraphStack {
-				found := false
-				for _, n := range sg.nodes {
-					if n == nodeName {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if !sg.nodeSet[nodeName] {
 					sg.nodes = append(sg.nodes, nodeName)
+					sg.nodeSet[nodeName] = true
 					log.Debugf("Added node %s to subgraph %s", nodeName, sg.name)
 				}
 			}

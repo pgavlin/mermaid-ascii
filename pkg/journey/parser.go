@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// JourneyKeyword is the keyword that identifies a journey diagram in Mermaid syntax.
-const JourneyKeyword = "journey"
+// journeyKeyword is the keyword that identifies a journey diagram in Mermaid syntax.
+const journeyKeyword = "journey"
 
 // JourneyDiagram represents a parsed user journey diagram with sections and tasks.
 type JourneyDiagram struct {
@@ -39,7 +39,7 @@ func IsJourneyDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == JourneyKeyword
+		return trimmed == journeyKeyword
 	}
 	return false
 }
@@ -55,8 +55,8 @@ func Parse(input string) (*JourneyDiagram, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != JourneyKeyword {
-		return nil, fmt.Errorf("expected %q keyword", JourneyKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != journeyKeyword {
+		return nil, fmt.Errorf("expected %q keyword", journeyKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

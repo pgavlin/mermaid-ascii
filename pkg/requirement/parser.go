@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// RequirementDiagramKeyword is the Mermaid keyword that identifies a requirement diagram.
-const RequirementDiagramKeyword = "requirementDiagram"
+// requirementDiagramKeyword is the Mermaid keyword that identifies a requirement diagram.
+const requirementDiagramKeyword = "requirementDiagram"
 
 // Requirement represents a requirement node.
 type Requirement struct {
@@ -51,7 +51,7 @@ func IsRequirementDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, RequirementDiagramKeyword)
+		return strings.HasPrefix(trimmed, requirementDiagramKeyword)
 	}
 	return false
 }
@@ -86,8 +86,8 @@ func Parse(input string) (*RequirementDiagram, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != RequirementDiagramKeyword {
-		return nil, fmt.Errorf("expected %q keyword", RequirementDiagramKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != requirementDiagramKeyword {
+		return nil, fmt.Errorf("expected %q keyword", requirementDiagramKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

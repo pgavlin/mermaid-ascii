@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// ArchitectureBetaKeyword is the Mermaid keyword that identifies an architecture diagram.
-const ArchitectureBetaKeyword = "architecture-beta"
+// architectureBetaKeyword is the Mermaid keyword that identifies an architecture diagram.
+const architectureBetaKeyword = "architecture-beta"
 
 // Service represents a service/node in the architecture diagram.
 type Service struct {
@@ -52,7 +52,7 @@ func IsArchitectureDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, ArchitectureBetaKeyword)
+		return strings.HasPrefix(trimmed, architectureBetaKeyword)
 	}
 	return false
 }
@@ -69,8 +69,8 @@ func Parse(input string) (*ArchitectureDiagram, error) {
 
 	// "architecture-beta" tokenizes as Ident("architecture") Operator("-") Ident("beta")
 	keyword := collectKeyword(s)
-	if keyword != ArchitectureBetaKeyword {
-		return nil, fmt.Errorf("expected %q keyword", ArchitectureBetaKeyword)
+	if keyword != architectureBetaKeyword {
+		return nil, fmt.Errorf("expected %q keyword", architectureBetaKeyword)
 	}
 	s.SkipNewlines()
 

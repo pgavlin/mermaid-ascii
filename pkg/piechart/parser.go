@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// PieKeyword is the Mermaid keyword that identifies a pie chart.
-const PieKeyword = "pie"
+// pieKeyword is the Mermaid keyword that identifies a pie chart.
+const pieKeyword = "pie"
 
 // PieChart represents a parsed pie chart with a title and data slices.
 type PieChart struct {
@@ -34,7 +34,7 @@ func IsPieChart(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == PieKeyword || strings.HasPrefix(trimmed, PieKeyword+" ")
+		return trimmed == pieKeyword || strings.HasPrefix(trimmed, pieKeyword+" ")
 	}
 	return false
 }
@@ -51,8 +51,8 @@ func Parse(input string) (*PieChart, error) {
 
 	// Expect "pie"
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != PieKeyword {
-		return nil, fmt.Errorf("expected %q keyword", PieKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != pieKeyword {
+		return nil, fmt.Errorf("expected %q keyword", pieKeyword)
 	}
 	s.Next()
 

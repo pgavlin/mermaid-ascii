@@ -9,8 +9,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// KanbanKeyword is the Mermaid keyword that identifies a Kanban board diagram.
-const KanbanKeyword = "kanban"
+// kanbanKeyword is the Mermaid keyword that identifies a Kanban board diagram.
+const kanbanKeyword = "kanban"
 
 // KanbanBoard represents a parsed Kanban board with columns and cards.
 type KanbanBoard struct {
@@ -36,7 +36,7 @@ func IsKanbanBoard(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == KanbanKeyword
+		return trimmed == kanbanKeyword
 	}
 	return false
 }
@@ -56,8 +56,8 @@ func Parse(input string) (*KanbanBoard, error) {
 		return nil, fmt.Errorf("no content found")
 	}
 
-	if strings.TrimSpace(lines[0]) != KanbanKeyword {
-		return nil, fmt.Errorf("expected %q keyword", KanbanKeyword)
+	if strings.TrimSpace(lines[0]) != kanbanKeyword {
+		return nil, fmt.Errorf("expected %q keyword", kanbanKeyword)
 	}
 	lines = lines[1:]
 

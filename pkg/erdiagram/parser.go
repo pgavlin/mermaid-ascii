@@ -8,8 +8,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// ERDiagramKeyword is the Mermaid keyword that identifies an entity-relationship diagram.
-const ERDiagramKeyword = "erDiagram"
+// erDiagramKeyword is the Mermaid keyword that identifies an entity-relationship diagram.
+const erDiagramKeyword = "erDiagram"
 
 // Cardinality represents the cardinality of a relationship end.
 type Cardinality int
@@ -69,7 +69,7 @@ func IsERDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, ERDiagramKeyword)
+		return strings.HasPrefix(trimmed, erDiagramKeyword)
 	}
 	return false
 }
@@ -85,8 +85,8 @@ func Parse(input string) (*ERDiagram, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != ERDiagramKeyword {
-		return nil, fmt.Errorf("expected %q keyword", ERDiagramKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != erDiagramKeyword {
+		return nil, fmt.Errorf("expected %q keyword", erDiagramKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()

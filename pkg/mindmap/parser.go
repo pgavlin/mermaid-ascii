@@ -8,8 +8,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/diagram"
 )
 
-// MindmapKeyword is the keyword that identifies a mindmap diagram in Mermaid syntax.
-const MindmapKeyword = "mindmap"
+// mindmapKeyword is the keyword that identifies a mindmap diagram in Mermaid syntax.
+const mindmapKeyword = "mindmap"
 
 // MindmapDiagram represents a parsed mindmap diagram with a root node.
 type MindmapDiagram struct {
@@ -50,7 +50,7 @@ func IsMindmapDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == MindmapKeyword
+		return trimmed == mindmapKeyword
 	}
 	return false
 }
@@ -68,8 +68,8 @@ func Parse(input string) (*MindmapDiagram, error) {
 		return nil, fmt.Errorf("no content found")
 	}
 
-	if strings.TrimSpace(lines[0]) != MindmapKeyword {
-		return nil, fmt.Errorf("expected %q keyword", MindmapKeyword)
+	if strings.TrimSpace(lines[0]) != mindmapKeyword {
+		return nil, fmt.Errorf("expected %q keyword", mindmapKeyword)
 	}
 	lines = lines[1:]
 

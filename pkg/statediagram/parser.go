@@ -8,8 +8,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// StateDiagramKeyword is the Mermaid keyword that identifies a state diagram.
-const StateDiagramKeyword = "stateDiagram-v2"
+// stateDiagramKeyword is the Mermaid keyword that identifies a state diagram.
+const stateDiagramKeyword = "stateDiagram-v2"
 
 // State represents a state in the diagram.
 type State struct {
@@ -61,7 +61,7 @@ func IsStateDiagram(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return strings.HasPrefix(trimmed, StateDiagramKeyword)
+		return strings.HasPrefix(trimmed, stateDiagramKeyword)
 	}
 	return false
 }
@@ -79,13 +79,13 @@ func Parse(input string) (*StateDiagram, error) {
 	// Expect "stateDiagram-v2"
 	tok := s.Peek()
 	if tok.Kind != parser.TokenIdent {
-		return nil, fmt.Errorf("expected %q keyword", StateDiagramKeyword)
+		return nil, fmt.Errorf("expected %q keyword", stateDiagramKeyword)
 	}
 	// The keyword is split into tokens: "stateDiagram" then "-" then "v2"
 	// Collect the full keyword text
 	keyword := collectKeyword(s)
-	if keyword != StateDiagramKeyword {
-		return nil, fmt.Errorf("expected %q keyword", StateDiagramKeyword)
+	if keyword != stateDiagramKeyword {
+		return nil, fmt.Errorf("expected %q keyword", stateDiagramKeyword)
 	}
 	s.SkipNewlines()
 

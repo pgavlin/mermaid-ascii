@@ -8,8 +8,8 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/parser"
 )
 
-// GitGraphKeyword is the keyword that identifies a gitGraph diagram in Mermaid syntax.
-const GitGraphKeyword = "gitGraph"
+// gitGraphKeyword is the keyword that identifies a gitGraph diagram in Mermaid syntax.
+const gitGraphKeyword = "gitGraph"
 
 // GitGraph represents a parsed git graph diagram containing commits and branches.
 type GitGraph struct {
@@ -56,7 +56,7 @@ func IsGitGraph(input string) bool {
 		if trimmed == "" || strings.HasPrefix(trimmed, "%%") {
 			continue
 		}
-		return trimmed == GitGraphKeyword
+		return trimmed == gitGraphKeyword
 	}
 	return false
 }
@@ -72,8 +72,8 @@ func Parse(input string) (*GitGraph, error) {
 	s.SkipNewlines()
 
 	tok := s.Peek()
-	if tok.Kind != parser.TokenIdent || tok.Text != GitGraphKeyword {
-		return nil, fmt.Errorf("expected %q keyword", GitGraphKeyword)
+	if tok.Kind != parser.TokenIdent || tok.Text != gitGraphKeyword {
+		return nil, fmt.Errorf("expected %q keyword", gitGraphKeyword)
 	}
 	s.Next()
 	s.SkipNewlines()
