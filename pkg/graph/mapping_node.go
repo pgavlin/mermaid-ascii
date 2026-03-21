@@ -1,8 +1,31 @@
 package graph
 
 import (
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 )
+
+// nameLines splits a node's display name into lines (split on newline).
+func (n *node) nameLines() []string {
+	return strings.Split(n.name, "\n")
+}
+
+// nameWidth returns the width of the widest line in a node's display name.
+func (n *node) nameWidth() int {
+	w := 0
+	for _, line := range n.nameLines() {
+		if len(line) > w {
+			w = len(line)
+		}
+	}
+	return w
+}
+
+// nameHeight returns the number of lines in a node's display name.
+func (n *node) nameHeight() int {
+	return len(n.nameLines())
+}
 
 type node struct {
 	id             string // unique identifier (map key, e.g. "A")
@@ -38,7 +61,7 @@ func (g *graph) setColumnWidth(n *node) {
 	// - 2x padding
 	// - 2x margin
 	col1 := 1
-	col2 := 2*g.boxBorderPadding + len(n.name)
+	col2 := 2*g.boxBorderPadding + n.nameWidth()
 	col3 := 1
 
 	// Shapes that need extra width
@@ -56,8 +79,8 @@ func (g *graph) setColumnWidth(n *node) {
 		col2 += 2 // extra char on each side
 	case shapeCircle:
 		// Circle needs width >= height for symmetry
-		minTextWidth := 1 + 2*g.boxBorderPadding
-		heightNeeded := 1 + 2*g.boxBorderPadding
+		minTextWidth := n.nameWidth() + 2*g.boxBorderPadding
+		heightNeeded := n.nameHeight() + 2*g.boxBorderPadding
 		if col2 < heightNeeded+2 {
 			col2 = minTextWidth + 2
 		}
@@ -68,7 +91,7 @@ func (g *graph) setColumnWidth(n *node) {
 
 	colsToBePlaced := []int{col1, col2, col3}
 
-	rowHeight := 1 + 2*g.boxBorderPadding
+	rowHeight := n.nameHeight() + 2*g.boxBorderPadding
 	// Diamond needs extra height for the diagonal shape
 	if n.shape == shapeDiamond {
 		rowHeight += 2 // extra rows for top and bottom points

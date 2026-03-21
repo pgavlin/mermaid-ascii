@@ -127,6 +127,13 @@ func stripMarkdown(s string) string {
 	return s
 }
 
+// replaceBrTags replaces HTML <br>, <br/>, and <br /> tags with newlines.
+var brTagRegexp = regexp.MustCompile(`<br\s*/?>`)
+
+func replaceBrTags(s string) string {
+	return brTagRegexp.ReplaceAllString(s, "\n")
+}
+
 func addNode(node textNode, data *orderedmap.OrderedMap[string, []textEdge], nodeInfo map[string]textNode) {
 	if _, ok := data.Get(node.id); !ok {
 		data.Set(node.id, []textEdge{})
@@ -362,6 +369,7 @@ func (p *graphParser) parseNode() (textNode, bool) {
 	// Post-process label
 	label = decodeEntityCodes(label)
 	label = stripMarkdown(label)
+	label = replaceBrTags(label)
 
 	return textNode{id: id, name: label, styleClass: class, shape: shape}, true
 }

@@ -196,11 +196,18 @@ func getNodeDimensions(n *node, g graph) (int, int) {
 }
 
 // drawNodeText draws the node's display name centered in the drawing.
+// Multi-line labels (from <br/> tags) are rendered with each line centered.
 func drawNodeText(d *drawing, n *node, g graph, w, h int) {
-	textY := h / 2
-	textX := w/2 - CeilDiv(len(n.name), 2) + 1
-	for x := 0; x < len(n.name); x++ {
-		(*d)[textX+x][textY] = wrapTextInColor(string(n.name[x]), n.styleClass.styles["color"], g.styleType)
+	lines := n.nameLines()
+	numLines := len(lines)
+	// Vertically center the block of lines
+	startY := h/2 - (numLines-1)/2
+	for i, line := range lines {
+		textY := startY + i
+		textX := w/2 - CeilDiv(len(line), 2) + 1
+		for x := 0; x < len(line); x++ {
+			(*d)[textX+x][textY] = wrapTextInColor(string(line[x]), n.styleClass.styles["color"], g.styleType)
+		}
 	}
 }
 
