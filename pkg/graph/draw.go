@@ -158,6 +158,7 @@ func Render(properties *Properties, config *diagram.Config) (string, error) {
 	if config.PaddingBetweenY > 0 {
 		properties.paddingY = config.PaddingBetweenY
 	}
+	properties.targetWidth = config.TargetWidth
 
 	return drawMap(properties), nil
 }
@@ -171,6 +172,7 @@ func drawMap(properties *Properties) string {
 	g.graphDirection = properties.graphDirection
 	g.boxBorderPadding = properties.boxBorderPadding
 	g.showCoords = properties.showCoords
+	g.targetWidth = properties.targetWidth
 	g.setSubgraphs(properties.subgraphs)
 	g.createMapping()
 	d := g.draw()

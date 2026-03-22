@@ -9,6 +9,7 @@ import (
 	"github.com/pgavlin/mermaid-ascii/pkg/render"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // Global flags (CLI only - not used during rendering)
@@ -19,6 +20,7 @@ var cliPaddingBetweenX = 5
 var cliPaddingBetweenY = 5
 var cliGraphDirection = "LR"
 var cliUseAscii = false
+var cliTargetWidth = 0
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -51,6 +53,13 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		// Default target width to terminal width if not explicitly set
+		if !cmd.Flags().Changed("width") {
+			if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+				cliTargetWidth = w
+			}
+		}
+
 		// Create render configuration from flags
 		config, err := diagram.NewCLIConfig(
 			cliUseAscii,
@@ -60,6 +69,7 @@ var rootCmd = &cobra.Command{
 			cliPaddingBetweenX,
 			cliPaddingBetweenY,
 			cliGraphDirection,
+			cliTargetWidth,
 		)
 		if err != nil {
 			log.Fatalf("Invalid configuration: %v", err)
@@ -94,6 +104,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&cliPaddingBetweenX, "paddingX", "x", cliPaddingBetweenX, "Horizontal space between nodes")
 	rootCmd.PersistentFlags().IntVarP(&cliPaddingBetweenY, "paddingY", "y", cliPaddingBetweenY, "Vertical space between nodes")
 	rootCmd.PersistentFlags().IntVarP(&cliBoxBorderPadding, "borderPadding", "p", cliBoxBorderPadding, "Padding between text and border")
+	rootCmd.PersistentFlags().IntVarP(&cliTargetWidth, "width", "w", cliTargetWidth, "Target output width in characters (0 = no limit)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

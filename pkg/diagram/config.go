@@ -32,6 +32,11 @@ type Config struct {
 	// This controls whether graphs use colored output (html) or plain text (cli)
 	StyleType string
 
+	// TargetWidth is the desired maximum output width in characters (0 = no constraint).
+	// The renderer will attempt to fit within this width by reducing padding and
+	// word-wrapping node labels, but may exceed it if the content cannot be compressed further.
+	TargetWidth int
+
 	// --- Sequence diagram-specific configuration ---
 
 	// SequenceParticipantSpacing is the horizontal space between participants
@@ -80,7 +85,7 @@ func NewConfig(useAscii bool, graphDirection, styleType string) (*Config, error)
 
 // NewCLIConfig creates a Config suitable for CLI output with the given parameters.
 // Returns an error if any values are invalid.
-func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX, paddingY int, graphDirection string) (*Config, error) {
+func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX, paddingY int, graphDirection string, targetWidth int) (*Config, error) {
 	config := DefaultConfig()
 	config.UseAscii = useAscii
 	config.ShowCoords = showCoords
@@ -90,6 +95,7 @@ func NewCLIConfig(useAscii, showCoords, verbose bool, boxBorderPadding, paddingX
 	config.PaddingBetweenY = paddingY
 	config.GraphDirection = graphDirection
 	config.StyleType = "cli"
+	config.TargetWidth = targetWidth
 
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -142,6 +148,9 @@ func (c *Config) Validate() error {
 	}
 	if c.StyleType != "cli" && c.StyleType != "html" {
 		return &ConfigError{Field: "StyleType", Value: c.StyleType, Message: "must be \"cli\" or \"html\""}
+	}
+	if c.TargetWidth < 0 {
+		return &ConfigError{Field: "TargetWidth", Value: c.TargetWidth, Message: "must be non-negative"}
 	}
 
 	// Validate sequence diagram configuration

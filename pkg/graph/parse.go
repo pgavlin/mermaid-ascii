@@ -26,6 +26,7 @@ type Properties struct {
 	useAscii         bool
 	boxBorderPadding int
 	showCoords       bool
+	targetWidth      int
 }
 
 // nodeShape represents the visual shape of a node in a graph diagram.

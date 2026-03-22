@@ -424,6 +424,10 @@ func (d *drawing) drawTextOnLine(line []drawingCoord, label string) {
 	}
 	middleX := minX + (maxX-minX)/2
 	middleY := minY + (maxY-minY)/2
-	startLabelCoord := drawingCoord{x: middleX - len(label)/2, y: middleY}
+	startX := middleX - len(label)/2
+	if startX < 0 {
+		startX = 0
+	}
+	startLabelCoord := drawingCoord{x: startX, y: middleY}
 	d.drawText(startLabelCoord, label)
 }

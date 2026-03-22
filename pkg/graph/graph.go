@@ -47,6 +47,7 @@ type graph struct {
 	graphDirection  string
 	boxBorderPadding int
 	showCoords      bool
+	targetWidth     int
 }
 
 type subgraph struct {
@@ -307,6 +308,9 @@ func (g *graph) createMapping() {
 		g.increaseGridSizeForPath(e.path)
 		g.determineLabelLine(e)
 	}
+
+	// Apply target width constraint (wraps text, shrinks padding)
+	g.constrainToTargetWidth()
 
 	// Flip grid coordinates for BT/RL before drawing
 	if actualDirection == "BT" || actualDirection == "RL" {

@@ -1,6 +1,6 @@
 module github.com/pgavlin/mermaid-ascii
 
-go 1.21
+go 1.25.0
 
 require (
 	github.com/elliotchance/orderedmap/v2 v2.2.0
@@ -9,6 +9,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
+	golang.org/x/term v0.41.0
 )
 
 require (
@@ -39,7 +40,7 @@ require (
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

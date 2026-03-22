@@ -54,6 +54,264 @@ func (n *node) setDrawing(g graph) *drawing {
 	return d
 }
 
+// wordWrap wraps text to fit within maxWidth characters.
+// It preserves existing newlines, wraps at word boundaries when possible,
+// and falls back to character-level breaks for words longer than maxWidth.
+func wordWrap(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		maxWidth = 1
+	}
+	lines := strings.Split(text, "\n")
+	var result []string
+	for _, line := range lines {
+		if len(line) <= maxWidth {
+			result = append(result, line)
+			continue
+		}
+		// Wrap this line
+		for len(line) > maxWidth {
+			// Find last space within maxWidth
+			breakAt := -1
+			for i := maxWidth; i >= 0; i-- {
+				if i < len(line) && line[i] == ' ' {
+					breakAt = i
+					break
+				}
+			}
+			if breakAt <= 0 {
+				// No space found, break at maxWidth
+				breakAt = maxWidth
+				result = append(result, line[:breakAt])
+				line = line[breakAt:]
+			} else {
+				result = append(result, line[:breakAt])
+				line = line[breakAt+1:] // skip the space
+			}
+		}
+		if len(line) > 0 {
+			result = append(result, line)
+		}
+	}
+	return strings.Join(result, "\n")
+}
+
+// shapeExtraWidth returns the extra width a shape adds beyond text + border padding.
+func shapeExtraWidth(shape nodeShape, boxBorderPadding int) int {
+	switch shape {
+	case shapeDiamond:
+		return 2 * (1 + boxBorderPadding)
+	case shapeHexagon:
+		return 4
+	case shapeSubroutine:
+		return 2
+	case shapeFlag:
+		return 2
+	default:
+		return 0
+	}
+}
+
+// longestWord returns the length of the longest whitespace-delimited word in text.
+func longestWord(text string) int {
+	max := 0
+	for _, line := range strings.Split(text, "\n") {
+		for _, word := range strings.Fields(line) {
+			if len(word) > max {
+				max = len(word)
+			}
+		}
+	}
+	if max == 0 {
+		max = 1
+	}
+	return max
+}
+
+// constrainToTargetWidth adjusts column widths and wraps node text
+// to try to fit the diagram within the target width.
+// Phase 1: reduce padding/spacing columns. Phase 2: wrap node text.
+func (g *graph) constrainToTargetWidth() {
+	if g.targetWidth <= 0 {
+		return
+	}
+
+	sumWidth := func() int {
+		total := 0
+		for _, w := range g.columnWidth {
+			total += w
+		}
+		return total
+	}
+
+	totalBefore := sumWidth()
+	if totalBefore <= g.targetWidth {
+		return
+	}
+
+	// Classify columns
+	type colClass int
+	const (
+		colOther   colClass = iota // padding, edge paths
+		colBorder                  // node border columns
+		colContent                 // node content columns
+	)
+
+	classification := make(map[int]colClass)
+	contentColNodes := make(map[int][]*node)
+
+	for _, n := range g.nodes {
+		if n.gridCoord == nil {
+			continue
+		}
+		classification[n.gridCoord.x] = colBorder
+		classification[n.gridCoord.x+2] = colBorder
+		classification[n.gridCoord.x+1] = colContent
+		contentColNodes[n.gridCoord.x+1] = append(contentColNodes[n.gridCoord.x+1], n)
+	}
+
+	// Build set of edge label column minimums
+	edgeLabelMins := make(map[int]int)
+	for _, e := range g.edges {
+		if len(e.text) == 0 || len(e.labelLine) < 2 {
+			continue
+		}
+		minX, maxX := e.labelLine[0].x, e.labelLine[1].x
+		if minX > maxX {
+			minX, maxX = maxX, minX
+		}
+		middleX := minX + (maxX-minX)/2
+		labelMin := len(e.text) + 2
+		if labelMin > edgeLabelMins[middleX] {
+			edgeLabelMins[middleX] = labelMin
+		}
+	}
+
+	// Phase 1: Reduce padding/spacing columns
+	// Padding columns are "other" columns (not border, not content)
+	const minPadding = 1
+	for col, w := range g.columnWidth {
+		if classification[col] != colOther {
+			continue
+		}
+		// Don't shrink below edge label minimums
+		minW := minPadding
+		if elm, ok := edgeLabelMins[col]; ok && elm > minW {
+			minW = elm
+		}
+		if w > minW {
+			g.columnWidth[col] = minW
+		}
+	}
+
+	if sumWidth() <= g.targetWidth {
+		return
+	}
+
+	// Phase 2: Wrap node text in content columns
+	// Compute minimum text width per content column (longest word across all nodes)
+	const minTextChars = 5 // absolute minimum readable width
+	excess := sumWidth() - g.targetWidth
+
+	// Compute total shrinkable width from content columns
+	type contentColInfo struct {
+		col         int
+		currentWidth int
+		minWidth    int // minimum based on longest word + shape extras
+	}
+	var contentCols []contentColInfo
+	totalShrinkable := 0
+
+	for col, nodes := range contentColNodes {
+		currentW := g.columnWidth[col]
+		// Find the minimum text width (longest word across nodes in this column)
+		maxLongestWord := minTextChars
+		maxShapeExtra := 0
+		for _, n := range nodes {
+			lw := longestWord(n.name)
+			if lw > maxLongestWord {
+				maxLongestWord = lw
+			}
+			extra := shapeExtraWidth(n.shape, g.boxBorderPadding)
+			if extra > maxShapeExtra {
+				maxShapeExtra = extra
+			}
+		}
+		minW := 2*g.boxBorderPadding + maxLongestWord + maxShapeExtra
+		// Also respect edge label minimums on this column
+		if elm, ok := edgeLabelMins[col]; ok && elm > minW {
+			minW = elm
+		}
+		if minW >= currentW {
+			continue // can't shrink this column
+		}
+		contentCols = append(contentCols, contentColInfo{
+			col:         col,
+			currentWidth: currentW,
+			minWidth:    minW,
+		})
+		totalShrinkable += currentW - minW
+	}
+
+	if totalShrinkable <= 0 {
+		return
+	}
+
+	shrinkRatio := float64(excess) / float64(totalShrinkable)
+	if shrinkRatio > 1.0 {
+		shrinkRatio = 1.0
+	}
+
+	// Shrink content columns and wrap text
+	for _, ci := range contentCols {
+		reduction := int(float64(ci.currentWidth-ci.minWidth) * shrinkRatio)
+		newColWidth := ci.currentWidth - reduction
+
+		// Wrap all nodes in this column
+		for _, n := range contentColNodes[ci.col] {
+			extra := shapeExtraWidth(n.shape, g.boxBorderPadding)
+			maxTextWidth := newColWidth - 2*g.boxBorderPadding - extra
+			if maxTextWidth < 1 {
+				maxTextWidth = 1
+			}
+			if n.nameWidth() > maxTextWidth {
+				n.name = wordWrap(n.name, maxTextWidth)
+			}
+		}
+
+		// Recalculate column width from actual wrapped text
+		maxNeeded := 0
+		for _, n := range contentColNodes[ci.col] {
+			extra := shapeExtraWidth(n.shape, g.boxBorderPadding)
+			needed := 2*g.boxBorderPadding + n.nameWidth() + extra
+			if n.shape == shapeCircle {
+				heightNeeded := n.nameHeight() + 2*g.boxBorderPadding
+				if needed < heightNeeded+2 {
+					needed = n.nameWidth() + 2*g.boxBorderPadding + 2
+				}
+			}
+			if needed > maxNeeded {
+				maxNeeded = needed
+			}
+		}
+		if maxNeeded > 0 {
+			g.columnWidth[ci.col] = maxNeeded
+		}
+	}
+
+	// Recalculate row heights (wrapping may have increased line counts)
+	for _, n := range g.nodes {
+		if n.gridCoord == nil {
+			continue
+		}
+		rowHeight := n.nameHeight() + 2*g.boxBorderPadding
+		if n.shape == shapeDiamond {
+			rowHeight += 2
+		}
+		yCoord := n.gridCoord.y + 1
+		g.rowHeight[yCoord] = Max(g.rowHeight[yCoord], rowHeight)
+	}
+}
+
 func (g *graph) setColumnWidth(n *node) {
 	// For every node there are three columns:
 	// - 2 lines of border
